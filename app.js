@@ -1,5 +1,4 @@
-import * as THREE from 'three';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+// THREE e OrbitControls carregados como scripts globais (compatível com file://)
 
 // ---------------- Modelo de dados ----------------
 let projeto = novoProjeto();
@@ -542,7 +541,60 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color('#dfe8ee');
 const camera3 = new THREE.PerspectiveCamera(50, 1, 0.1, 500);
 camera3.position.set(15, 12, 15);
-const controls = new OrbitControls(camera3, cv3);
+// ---- OrbitControls simplificado (órbita esférica + zoom + pan, com damping) ----
+class OrbitSimples {
+  constructor(camera, dom) {
+    this.camera = camera; this.dom = dom;
+    this.target = new THREE.Vector3(5, 1, 5);
+    this.enableDamping = true; this.dampingFactor = 0.1;
+    this.raio = 20; this.teta = Math.PI / 4; this.phi = Math.PI / 3;
+    this.velTeta = 0; this.velPhi = 0; this.velRaio = 0; this.panX = 0; this.panY = 0;
+    this.arrastando = false; this.panning = false;
+    this.x = 0; this.y = 0;
+    dom.addEventListener('mousedown', e => {
+      this.arrastando = true; this.panning = (e.button === 2 || e.button === 1 || e.shiftKey);
+      this.x = e.clientX; this.y = e.clientY;
+    });
+    window.addEventListener('mouseup', () => { this.arrastando = false; });
+    dom.addEventListener('mousemove', e => {
+      if (!this.arrastando) return;
+      const dx = e.clientX - this.x, dy = e.clientY - this.y;
+      this.x = e.clientX; this.y = e.clientY;
+      if (this.panning) {
+        // pan no plano da tela
+        const f = this.raio * 0.0015;
+        const direita = new THREE.Vector3().subVectors(this.camera.position, this.target).cross(this.camera.up).normalize();
+        const cima = new THREE.Vector3().crossVectors(direita, this.camera.getWorldDirection(new THREE.Vector3())).normalize();
+        this.target.addScaledVector(direita, dx * f).addScaledVector(cima, -dy * f);
+      } else {
+        this.velTeta = -dx * 0.005; this.velPhi = -dy * 0.005;
+        this.teta += this.velTeta; this.phi += this.velPhi;
+      }
+    });
+    dom.addEventListener('wheel', e => {
+      e.preventDefault();
+      this.raio *= (e.deltaY > 0 ? 1.1 : 0.9);
+      this.raio = Math.max(1, Math.min(300, this.raio));
+    }, { passive: false });
+    dom.addEventListener('contextmenu', e => e.preventDefault());
+  }
+  update() {
+    // damping: continua girando um pouco após soltar
+    if (this.enableDamping && !this.arrastando) {
+      this.teta += this.velTeta; this.phi += this.velPhi;
+      this.velTeta *= 0.9; this.velPhi *= 0.9;
+    }
+    this.phi = Math.max(0.05, Math.min(Math.PI - 0.05, this.phi));
+    const sp = Math.sin(this.phi);
+    this.camera.position.set(
+      this.target.x + this.raio * sp * Math.sin(this.teta),
+      this.target.y + this.raio * Math.cos(this.phi),
+      this.target.z + this.raio * sp * Math.cos(this.teta)
+    );
+    this.camera.lookAt(this.target);
+  }
+}
+const controls = new OrbitSimples(camera3, cv3);
 controls.target.set(5, 1, 5);
 controls.enableDamping = true;
 scene.add(new THREE.AmbientLight(0xffffff, 0.6));
