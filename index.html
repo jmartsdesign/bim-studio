@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BIM Studio — MVP</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; font-family: "Segoe UI", Arial, sans-serif; font-size: 13px; overflow: hidden; }
+  #topbar { height: 44px; display: flex; align-items: center; gap: 6px; padding: 0 10px;
+            background: #2b2f36; color: #eee; border-bottom: 1px solid #1a1d22; }
+  #topbar button, #toolbar button { cursor: pointer; }
+  #topbar .sep { width: 1px; height: 24px; background: #4a4f58; margin: 0 4px; }
+  #topbar button { background: #3a3f47; color: #eee; border: 1px solid #4a4f58; border-radius: 4px;
+                   padding: 5px 10px; }
+  #topbar button:hover { background: #4a4f58; }
+  #logo { font-weight: 700; color: #7ec8ff; margin-right: 10px; font-size: 14px; }
+  #main { display: flex; height: calc(100% - 44px); }
+  #toolbar { width: 92px; background: #33373e; padding: 8px 6px; display: flex; flex-direction: column; gap: 6px;
+             border-right: 1px solid #1a1d22; }
+  #toolbar button { display: flex; align-items: center; gap: 7px; background: #3a3f47; color: #ddd;
+                    border: 1px solid transparent; border-radius: 5px; padding: 8px 8px; text-align: left; }
+  #toolbar button .ico { font-size: 15px; width: 18px; text-align: center; }
+  #toolbar button:hover { background: #4a4f58; }
+  #toolbar button.ativo { background: #1565c0; border-color: #64b5f6; color: #fff; }
+  #centro { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  #divisao { flex: 1; display: flex; min-height: 0; }
+  #area2d { flex: 1; position: relative; min-width: 0; background: #f5f6f2; }
+  #area3d { flex: 1; position: relative; min-width: 0; background: #dfe8ee; border-left: 1px solid #b9c4cc; }
+  canvas { display: block; width: 100%; height: 100%; }
+  .rotulo-canvas { position: absolute; top: 6px; left: 8px; font-size: 11px; color: #555;
+                   background: rgba(255,255,255,.7); padding: 2px 7px; border-radius: 3px; pointer-events: none; }
+  #dica { position: absolute; bottom: 6px; left: 8px; font-size: 11px; color: #666; pointer-events: none; }
+  #status { height: 26px; background: #2b2f36; color: #9aa3ad; display: flex; align-items: center;
+            gap: 20px; padding: 0 12px; font-size: 12px; border-top: 1px solid #1a1d22; }
+  #painelDir { width: 270px; background: #f4f4f2; border-left: 1px solid #c9cdc9; overflow-y: auto; }
+  .painel-sec { border-bottom: 1px solid #d8dcd8; padding: 8px 10px; }
+  .painel-sec h3 { font-size: 12px; color: #444; text-transform: uppercase; letter-spacing: .4px; margin-bottom: 8px; }
+  #listaAndares { display: flex; flex-direction: column; gap: 4px; }
+  .item-andar { display: flex; align-items: center; gap: 6px; padding: 4px 6px; border-radius: 4px; cursor: pointer;
+                border: 1px solid transparent; }
+  .item-andar:hover { background: #e8ebe8; }
+  .item-andar.ativo { background: #d0e4f7; border-color: #7fb3e0; }
+  .item-andar .nome { flex: 1; }
+  .item-andar input.alt { width: 52px; font-size: 12px; }
+  #listaAndares .botoes-andar { display: flex; gap: 4px; margin-top: 6px; }
+  #listaAndares .botoes-andar button { font-size: 11px; padding: 3px 8px; cursor: pointer; }
+  table.props { width: 100%; border-collapse: collapse; }
+  table.props td { padding: 3px 4px; vertical-align: middle; }
+  table.props td:first-child { color: #555; width: 90px; }
+  table.props input { width: 100%; padding: 3px 5px; border: 1px solid #bbb; border-radius: 3px; font-size: 12px; }
+  .vazio { color: #999; font-style: italic; }
+  button.btn-pequeno { font-size: 11px; padding: 3px 8px; cursor: pointer; }
+  @media print {
+    body * { visibility: hidden; }
+    #modalVista, #modalVista * { visibility: visible; }
+    #modalVista { position: absolute; inset: 0; background: #fff; display: flex !important; }
+    #modalVista > div { width: 100%; height: 95vh; border: none; }
+    #btnImprimir, #btnFecharVista, #btnPNG, #selEscala { display: none !important; }
+  }
+</style>
+</head>
+<body>
+<div id="topbar">
+  <span id="logo">BIM Studio</span>
+  <button id="btnNovo">Novo</button>
+  <button id="btnAbrir">Abrir…</button>
+  <button id="btnSalvar">Salvar</button>
+  <div class="sep"></div>
+  <button id="btnDesfazer">↶ Desfazer</button>
+  <button id="btnRefazer">↷ Refazer</button>
+  <button id="btnIFC">Exportar IFC</button>
+  <button id="btnPlanta">Planta PDF</button>
+  <button id="btnQuant">Quantitativos</button>
+  <button id="btnIlum">Iluminação</button>
+  <button id="btnVent">Ventilação</button>
+  <button id="btnSazonal">Sazonal</button>
+  <button id="btnOrc">Orçamento</button>
+  <button id="btnCSVOrc">CSV Orc.</button>
+  <button id="btnTerreno">Criar terreno</button>
+  <button id="btnVersaoManual">Salvar versão</button>
+  <button id="btnMemorial">Memorial</button>
+  <button id="btnCSV">CSV</button>
+  <button id="btnCorte">Gerar corte</button>
+  <span style="position:relative">
+    <button id="btnFachada">Fachada ▾</button>
+    <span id="menuFachadas" style="display:none; position:absolute; top:100%; left:0; background:#3a3f47; border:1px solid #4a4f58; border-radius:4px; z-index:60; min-width:110px">
+      <button data-fachada="sul" style="display:block;width:100%;text-align:left;padding:6px 12px">Sul</button>
+      <button data-fachada="norte" style="display:block;width:100%;text-align:left;padding:6px 12px">Norte</button>
+      <button data-fachada="leste" style="display:block;width:100%;text-align:left;padding:6px 12px">Leste</button>
+      <button data-fachada="oeste" style="display:block;width:100%;text-align:left;padding:6px 12px">Oeste</button>
+    </span>
+  </span>
+  <div class="sep"></div>
+  <label style="color:#9aa3ad"><input id="chkCotas" type="checkbox" checked> Cotas automáticas</label>
+  <div class="sep"></div>
+  <label style="color:#9aa3ad">Snap (m): <input id="inpSnap" type="number" step="0.05" min="0" value="0.25" style="width:52px"></label>
+  <span id="infoProj" style="margin-left:auto;color:#9aa3ad"></span>
+  <input type="file" id="arquivoProj" accept=".json" style="display:none">
+</div>
+<div id="main">
+  <div id="toolbar">
+    <button data-ferr="selecionar" class="ativo"><span class="ico">↖</span>Selecionar</button>
+    <button data-ferr="parede"><span class="ico">▬</span>Parede</button>
+    <button data-ferr="porta"><span class="ico">🚪</span>Porta</button>
+    <button data-ferr="janela"><span class="ico">🪟</span>Janela</button>
+    <button data-ferr="laje"><span class="ico">⬛</span>Laje</button>
+    <button data-ferr="coluna"><span class="ico">▮</span>Coluna</button>
+    <button data-ferr="escada"><span class="ico">🪜</span>Escada</button>
+    <button data-ferr="telhado"><span class="ico">🏠</span>Telhado</button>
+    <button data-ferr="objeto"><span class="ico">🛋️</span>Objeto</button>
+    <button data-ferr="pontoInst"><span class="ico">⚡</span>Instalação</button>
+    <button data-ferr="circuito"><span class="ico">🔌</span>Circuito</button>
+    <button data-ferr="terreno"><span class="ico">⛰️</span>Terreno</button>
+    <button data-ferr="medir"><span class="ico">📏</span>Medir</button>
+    <button data-ferr="corte"><span class="ico">✂️</span>Corte</button>
+    <button data-ferr="apagar"><span class="ico">🗑️</span>Apagar</button>
+  </div>
+  <div id="centro">
+    <div id="divisao">
+      <div id="area2d">
+        <canvas id="cv2d"></canvas>
+        <span class="rotulo-canvas">Planta 2D — Pavimento: <b id="nomeAndarAtual">1º Pavimento</b></span>
+        <span id="dica">Roda do mouse: zoom · Botão do meio ou Espaço+arrastar: mover · Duplo clique (laje): fechar polígono</span>
+      </div>
+      <div id="area3d">
+        <canvas id="cv3d"></canvas>
+        <span class="rotulo-canvas">3D — arraste para orbitar · roda para zoom</span>
+      </div>
+    </div>
+    <div id="status">
+      <span id="stCoord">X: —, Y: —</span>
+      <span id="stFerramenta">Ferramenta: Selecionar</span>
+      <span id="stSalvo">Projeto salvo automaticamente</span>
+    </div>
+  </div>
+  <div id="painelDir">
+    <div class="painel-sec">
+      <h3>Pavimentos</h3>
+      <div id="listaAndares"></div>
+    </div>
+    <div class="painel-sec">
+      <h3>Propriedades</h3>
+      <div id="props"><span class="vazio">Nenhum elemento selecionado.</span></div>
+    </div>
+    <div class="painel-sec">
+      <h3>Camadas</h3>
+      <div id="listaCamadas"></div>
+      <div style="margin-top:6px;font-size:11px;color:#777">Norte: <input id="inpNorte" type="number" step="15" value="0" style="width:44px"> º</div>
+    </div>
+    <div class="painel-sec" id="secObjetos" style="display:none">
+      <h3>Biblioteca de objetos</h3>
+      <div id="listaObjetos"></div>
+    </div>
+    <div class="painel-sec" id="secPontosInst" style="display:none">
+      <h3>Instalações</h3>
+      <div id="listaPontosInst"></div>
+    </div>
+    <div class="painel-sec" id="secCircuitos" style="display:none">
+      <h3>Circuitos</h3>
+      <div id="listaCircuitos"></div>
+      <div style="font-size:10px;color:#888;margin-top:4px">Clique para adicionar pontos; duplo clique finaliza.</div>
+    </div>
+    <div class="painel-sec">
+      <h3>Tipologias de unidade</h3>
+      <button id="btnSalvarTip" class="btn-pequeno" style="width:100%;margin-bottom:6px">Salvar pavimento como tipologia</button>
+      <div id="listaTipologias"></div>
+    </div>
+    <div class="painel-sec">
+      <h3>Versões (autossalve)</h3>
+      <div id="listaVersoes"></div>
+    </div>
+    <div class="painel-sec">
+      <h3>Sol</h3>
+      <label style="font-size:11px"><input id="chkSol" type="checkbox"> Simular sombras</label>
+      <div style="font-size:11px;color:#777;margin-top:4px">
+        Lat: <input id="inpLat" type="number" step="0.5" value="-23.55" style="width:52px"> º<br>
+        Hora: <input id="inpHora" type="number" step="0.5" min="0" max="24" value="14" style="width:44px"> ·
+        Dia: <input id="inpDia" type="number" min="1" max="31" value="21" style="width:36px">/<input id="inpMes" type="number" min="1" max="12" value="3" style="width:32px">
+      </div>
+      <button id="btnTimelapse" class="btn-pequeno" style="margin-top:4px;width:100%">▶ Timelapse</button>
+      <div id="infoSol" style="font-size:10px;color:#c77800;margin-top:4px"></div>
+    </div>
+    <div class="painel-sec">
+      <h3>Elementos do pavimento</h3>
+      <div id="listaElem"><span class="vazio">Pavimento vazio.</span></div>
+    </div>
+  </div>
+</div>
+
+<div id="modalVista" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:50; align-items:center; justify-content:center">
+  <div style="background:#fff; border-radius:8px; padding:12px; width:82vw; height:82vh; display:flex; flex-direction:column">
+    <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px">
+      <b id="tituloVista" style="font-size:14px"></b>
+      <label style="font-size:12px;color:#555">Corte:
+        <select id="selCorte" style="padding:2px 4px">
+          <option value="">Corte A—A</option>
+        </select>
+      </label>
+      <label style="font-size:12px;color:#555">Escala:
+        <select id="selEscala" style="padding:2px 4px">
+          <option value="auto">Automática</option>
+          <option value="50">1:50</option>
+          <option value="100">1:100</option>
+          <option value="125">1:125</option>
+          <option value="200">1:200</option>
+        </select>
+      </label>
+      <button id="btnPNG" style="padding:4px 10px; cursor:pointer">🖼️ PNG</button>
+      <button id="btnImprimir" style="padding:4px 10px; cursor:pointer">🖨️ Imprimir / PDF</button>
+      <button id="btnFecharVista" style="margin-left:auto; padding:4px 10px; cursor:pointer">Fechar ✕</button>
+    </div>
+    <canvas id="cvVista" style="flex:1; background:#fdfdfb; border:1px solid #ccc"></canvas>
+    <div id="tabelaOrcamento" style="display:none; flex:1; overflow:auto; padding-right: 6px"></div>
+  </div>
+</div>
+
+<script type="importmap">
+{ "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script type="module" src="app.js"></script>
+</body>
+</html>
