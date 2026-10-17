@@ -70,7 +70,9 @@
   .botao-nav:hover { background: var(--bg-ribbon-ativo); }
 
   /* Área central (2D + 3D) */
-  #areaCentral { flex: 1; display: flex; min-width: 0; }
+  #areaCentral { flex: 1; display: flex; min-width: 0; position: relative; }
+  #paletaProps { max-height: calc(100% - 24px); display: flex; flex-direction: column; }
+  #paletaCorpo { overflow-y: auto; }
   #area2d { flex: 1; position: relative; min-width: 0; background: #f0f2ee; }
   #area3d { flex: 1; position: relative; min-width: 0; background: #d8e2ea; border-left: 1px solid var(--borda); }
   canvas { display: block; width: 100%; height: 100%; }
@@ -400,21 +402,30 @@
       <span class="rotulo-canvas">3D — arraste para orbitar</span>
       <button class="btn-telacheia" data-fullscreen="#area3d" title="Tela cheia (F)">⛶</button>
     </div>
+    <!-- Paleta de propriedades FLUTUANTE (arrastável) -->
+  <div id="paletaProps" style="position:absolute; top: 52px; right: 12px; width: 250px; z-index: 10;
+       background: var(--bg-painel); border: 1px solid var(--borda); border-radius: 8px;
+       box-shadow: 0 6px 24px rgba(0,0,0,.45); overflow: hidden;">
+    <div id="paletaCabecalho" style="display:flex; align-items:center; gap:8px; padding: 8px 12px; cursor: move;
+         background: var(--bg-ribbon); border-bottom: 1px solid var(--borda); user-select: none;">
+      <b style="font-size:12px">Propriedades</b>
+      <button id="btnRecolherPaleta" title="Recolher/expandir" style="margin-left:auto; background:none; border:none; color:var(--texto); cursor:pointer; font-size:14px">▾</button>
+    </div>
+    <div id="paletaCorpo">
+      <div class="card"><div id="props"><span class="vazio">Nenhum elemento selecionado.</span></div></div>
+      <div class="card">
+        <div class="titulo-card">Ferramenta ativa</div>
+        <div id="stFerramenta">Selecionar</div>
+      </div>
+      <div class="card">
+        <div class="titulo-card">Sol / sombras</div>
+        <div id="infoSol" style="font-size:11px;color:#f2a900"></div>
+      </div>
+    </div>
+  </div>
   </div>
 
-  <!-- Propriedades -->
-  <div id="painelProps">
-    <h4>Propriedades</h4>
-    <div class="card"><div id="props"><span class="vazio">Nenhum elemento selecionado.</span></div></div>
-    <div class="card">
-      <div class="titulo-card">Ferramenta ativa</div>
-      <div id="stFerramenta">Selecionar</div>
-    </div>
-    <div class="card">
-      <div class="titulo-card">Sol / sombras</div>
-      <div id="infoSol" style="font-size:11px;color:#f2a900"></div>
-    </div>
-  </div>
+
 </div>
 
 <!-- Barra de status -->

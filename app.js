@@ -222,16 +222,19 @@ function desenhar2d() {
   cx2.clearRect(0, 0, W, H);
 
   // grade
-  const passo = 1;
+  const passo = gradePasso;
   const iniX = Math.floor(camera2d.cx - W / 2 / camera2d.escala), fimX = Math.ceil(camera2d.cx + W / 2 / camera2d.escala);
   const iniY = Math.floor(camera2d.cy - H / 2 / camera2d.escala), fimY = Math.ceil(camera2d.cy + H / 2 / camera2d.escala);
   cx2.lineWidth = 1;
-  for (let x = iniX; x <= fimX; x += passo) {
+  // ajuste automático: se as linhas ficarem a menos de 18 px, dobrar o passo
+  let passoEfetivo = gradePasso;
+  while (passoEfetivo * camera2d.escala < 18) passoEfetivo *= 2;
+  for (let x = iniX; x <= fimX; x += passoEfetivo) {
     const p = mundoParaTela(x, iniY);
     cx2.strokeStyle = x === 0 ? '#c9b03b' : '#e2e4de';
     cx2.beginPath(); cx2.moveTo(p.x, 0); cx2.lineTo(p.x, H); cx2.stroke();
   }
-  for (let y = iniY; y <= fimY; y += passo) {
+  for (let y = iniY; y <= fimY; y += passoEfetivo) {
     const p = mundoParaTela(iniX, y);
     cx2.strokeStyle = y === 0 ? '#c9b03b' : '#e2e4de';
     cx2.beginPath(); cx2.moveTo(0, p.y); cx2.lineTo(W, p.y); cx2.stroke();
@@ -562,11 +565,34 @@ function desenhar2d() {
     cx2.stroke(); cx2.setLineDash([]);
   }
 
-// marcador do OSNAP (quadradinho verde no ponto capturado)
+// régua cruzada: linhas cheias pelo cursor quando desenhando com ferramenta ativa
+  if (ferramenta !== 'selecionar' && ferramenta !== 'apagar' && ferramenta !== 'pan') {
+    const t = mundoParaTela(mouse2d.x, mouse2d.y);
+    cx2.save();
+    cx2.strokeStyle = 'rgba(21,101,192,.45)'; cx2.lineWidth = 1; cx2.setLineDash([4, 4]);
+    cx2.beginPath(); cx2.moveTo(t.x, 0); cx2.lineTo(t.x, H); cx2.stroke();
+    cx2.beginPath(); cx2.moveTo(0, t.y); cx2.lineTo(W, t.y); cx2.stroke();
+    cx2.setLineDash([]);
+    // marcações de coordenada nas bordas
+    cx2.fillStyle = '#1565c0'; cx2.font = '9px monospace';
+    cx2.textAlign = 'left';
+    cx2.fillText(mouse2d.x.toFixed(2), t.x + 4, 10);
+    cx2.fillText(mouse2d.y.toFixed(2), 2, t.y - 4);
+    cx2.restore();
+  }
+
+  // marcador do OSNAP (quadradinho verde no ponto capturado)
   if (osnapPonto) {
     const t = mundoParaTela(osnapPonto.x, osnapPonto.y);
     cx2.strokeStyle = '#00c853'; cx2.lineWidth = 2;
-    cx2.strokeRect(t.x - 5, t.y - 5, 10, 10);
+    if (osnapPonto.tipo === 'parede') {
+      // símbolo de "near"/perpendicular: triângulo
+      cx2.beginPath();
+      cx2.moveTo(t.x, t.y - 7); cx2.lineTo(t.x - 6, t.y + 4); cx2.lineTo(t.x + 6, t.y + 4);
+      cx2.closePath(); cx2.stroke();
+    } else {
+      cx2.strokeRect(t.x - 5, t.y - 5, 10, 10);
+    }
     cx2.font = '9px sans-serif'; cx2.fillStyle = '#00695c'; cx2.textAlign = 'left';
     cx2.fillText(osnapPonto.tipo, t.x + 8, t.y - 6);
   }
@@ -1072,9 +1098,16 @@ cv2.addEventListener('mousemove', ev => {
     m = { x: os.x, y: os.y };
     osnapPonto = os;
   } else {
-    osnapPonto = null;
-    // snap de grade (o existente) quando não há osnap
-    m = { x: aplicarSnap(m.x), y: aplicarSnap(m.y) };
+    // snap magnético à parede mais próxima (projeção perpendicular)
+    const sp = snapParede(m);
+    if (sp) {
+      m = { x: sp.x, y: sp.y };
+      osnapPonto = sp;
+    } else {
+      osnapPonto = null;
+      // snap de grade quando não há osnap
+      m = { x: aplicarSnap(m.x), y: aplicarSnap(m.y) };
+    }
   }
   // ORTHO: quando há ponto-base (parede/rampa/escada em traçado), restringir a 90°
   const base = preview?.pontos?.[preview.pontos.length - 1];
@@ -1425,6 +1458,7 @@ function sincronizar() {
 // ---- ORTHO e OSNAP (estilo CAD) ----
 let orthoAtivo = false;
 let osnapAtivo = true;
+let gradePasso = 1; // metros entre linhas da grade (configurável)
 let osnapPonto = null;  // {x, y, tipo} do snap atual
 const OSNAP_RAIO = 12;   // px de tolerância
 
@@ -1461,6 +1495,23 @@ function buscarOsnap(mxTela, myTela) {
   }
   return melhor;
 }
+// snap magnético: ponto mais próximo em qualquer parede (projeção perpendicular)
+function snapParede(mLivre) {
+  if (!osnapAtivo) return null;
+  let melhor = null, melhorD = 0.22; // tolerância em metros (~22 cm no mundo)
+  for (const e of projeto.elementos.filter(x => x.andar === projeto.idAndarAtivo && x.tipo === 'parede')) {
+    const d = distanciaPontoSegmento(mLivre.x, mLivre.y, e.x1, e.y1, e.x2, e.y2);
+    if (d < melhorD) {
+      // ponto projetado na parede
+      const dx = e.x2 - e.x1, dy = e.y2 - e.y1;
+      const t = Math.max(0, Math.min(1, ((mLivre.x - e.x1) * dx + (mLivre.y - e.y1) * dy) / (dx * dx + dy * dy || 1)));
+      melhor = { x: e.x1 + dx * t, y: e.y1 + dy * t, tipo: 'parede' };
+      melhorD = d;
+    }
+  }
+  return melhor;
+}
+
 // aplicar ORTHO: restringe ao ângulo de 90° mais próximo do ponto base
 function aplicarOrtho(pBase, pLivre) {
   if (!orthoAtivo || !pBase) return pLivre;
@@ -1468,6 +1519,41 @@ function aplicarOrtho(pBase, pLivre) {
   if (Math.abs(dx) >= Math.abs(dy)) return { x: pLivre.x, y: pBase.y };   // horizontal
   return { x: pBase.x, y: pLivre.y };                                      // vertical
 }
+
+// ---- paleta de propriedades flutuante: arrastar e recolher ----
+(() => {
+  const paleta = document.querySelector('#paletaProps');
+  const cab = document.querySelector('#paletaCabecalho');
+  if (!paleta || !cab) return;
+  let arrastando = false, offX = 0, offY = 0;
+  cab.addEventListener('mousedown', e => {
+    if (e.target.id === 'btnRecolherPaleta') return;
+    arrastando = true;
+    const r = paleta.getBoundingClientRect();
+    const pai = paleta.parentElement.getBoundingClientRect();
+    offX = e.clientX - r.left;
+    offY = e.clientY - r.top;
+    // mudar de right para left/top ao começar a arrastar
+    paleta.style.right = 'auto';
+    paleta.style.left = (r.left - pai.left) + 'px';
+    paleta.style.top = (r.top - pai.top) + 'px';
+    e.preventDefault();
+  });
+  window.addEventListener('mousemove', e => {
+    if (!arrastando) return;
+    const pai = paleta.parentElement.getBoundingClientRect();
+    paleta.style.left = Math.max(0, Math.min(pai.width - 60, e.clientX - pai.left - offX)) + 'px';
+    paleta.style.top = Math.max(0, Math.min(pai.height - 30, e.clientY - pai.top - offY)) + 'px';
+  });
+  window.addEventListener('mouseup', () => { arrastando = false; });
+  // recolher/expandir
+  document.querySelector('#btnRecolherPaleta')?.addEventListener('click', () => {
+    const corpo = document.querySelector('#paletaCorpo');
+    const escondido = corpo.style.display === 'none';
+    corpo.style.display = escondido ? '' : 'none';
+    document.querySelector('#btnRecolherPaleta').textContent = escondido ? '▾' : '▸';
+  });
+})();
 
 // ---- toggles da barra de status (F3/F7/F8) ----
 function alternarOrtho() {
@@ -1485,7 +1571,8 @@ function alternarOsnap() {
 $('#tgOrtho')?.addEventListener('click', alternarOrtho);
 $('#tgOsnap')?.addEventListener('click', alternarOsnap);
 $('#tgGrid')?.addEventListener('click', () => {
-  alert('A grade está sempre visível na planta em intervalos de 1 m.');
+  const v = prompt('Espaçamento da grade em metros (ex.: 0.5, 1, 2):', String(gradePasso));
+  if (v) { gradePasso = Math.max(0.1, parseFloat(v.replace(',', '.')) || 1); desenhar2d(); }
 });
 
 // ---- comandos de navegação 2D (estilo CAD) ----
