@@ -13,7 +13,7 @@ Não precisa instalar nada. Basta abrir o arquivo `index.html` em um navegador m
 | Categoria | Recurso |
 |---|---|
 | **Desenho 2D** | Planta com grade métrica, snap ajustável (0,25 m padrão), zoom (roda do mouse) e pan (botão do meio ou Espaço + arrastar) |
-| **Ferramentas** | Parede (encadeada), Porta, Janela (com peitoril), Laje (polígono), Coluna, Escada, Telhado, Objeto (biblioteca), Medir, Corte, Apagar |
+| **Ferramentas** | Parede, Porta, Janela (peitoril), Laje, Coluna, Escada, **Rampa de acessibilidade (NBR 9050)**, Telhado, Objeto, Medir, Corte, Apagar |
 | **3D** | Vista orbital simultânea com paredes, aberturas recortadas, lajes, colunas e sombras |
 | **Propriedades** | Painel para editar dimensões, espessuras, posição de porta/janela na parede, peitoril |
 | **Pavimentos** | Múltiplos pavimentos com altura piso-a-piso configurável; isolamento por pavimento |
@@ -21,6 +21,7 @@ Não precisa instalar nada. Basta abrir o arquivo `index.html` em um navegador m
 | **Edição** | Desfazer (Ctrl+Z) / Refazer (Ctrl+Shift+Z), excluir (Delete) |
 | **Cotas** | Cotas automáticas de comprimento nas paredes (ativáveis na barra superior) |
 | **IFC** | Exportação IFC4 (`.ifc`) com paredes, aberturas vazadas, lajes, colunas, escada, telhado e mobiliário (IfcFurniture) |
+| **Apresentação** | Botão "▶ Apresentar": tour guiado pelas vistas (planta, cortes, fachadas, estudos, memorial) com navegação por setas/teclado |
 | **Cortes/Fachadas** | **Múltiplas linhas de corte** (A—A, B—B, C—C...) com rótulos automáticos e seletor no modal; cotas verticais completas; fachadas nas 4 orientações |
 | **Camadas** | Paleta por disciplina — Arquitetura, Elétrica (amarelo), Hidráulica (azul) — com visibilidade seletiva em 2D, 3D e pranchas |
 | **Instalações** | 8 pontos: tomada, interruptor, luminária, quadro (elétrica); registro, torneira, ralo, caixa d'água (hidráulica) — símbolos 2D com leader e exportação IFC |
@@ -69,6 +70,6 @@ Não precisa instalar nada. Basta abrir o arquivo `index.html` em um navegador m
 ## Limitações do MVP
 
 - Aberturas no 3D interno são blocos sobrepostos (o vazamento real existe apenas no IFC exportado).
-- O telhado no 3D é uma aproximação visual (duas águas); no IFC é exportado como laje plana na cota do topo.
+- O telhado no 3D é uma aproximação visual (duas águas); a altura recalcula pela inclinação alvo (%) no painel de propriedades; no IFC é exportado como laje plana.
 - O corte/fachada é uma projeção simplificada (paredes e aberturas; sem esconder elementos atrás).
 - Sem DWG, bibliotecas paramétricas externas (GDL/RFA) ou colaboração multiusuário.

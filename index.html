@@ -56,7 +56,7 @@
     #modalVista, #modalVista * { visibility: visible; }
     #modalVista { position: absolute; inset: 0; background: #fff; display: flex !important; }
     #modalVista > div { width: 100%; height: 95vh; border: none; }
-    #btnImprimir, #btnFecharVista, #btnPNG, #selEscala { display: none !important; }
+    #btnImprimir, #btnFecharVista, #btnPNG, #selEscala, #selCorte, #tourBarra { display: none !important; }
   }
 </style>
 </head>
@@ -79,6 +79,7 @@
   <button id="btnCSVOrc">CSV Orc.</button>
   <button id="btnTerreno">Criar terreno</button>
   <button id="btnVersaoManual">Salvar versão</button>
+  <button id="btnTour">▶ Apresentar</button>
   <button id="btnMemorial">Memorial</button>
   <button id="btnCSV">CSV</button>
   <button id="btnCorte">Gerar corte</button>
@@ -107,6 +108,7 @@
     <button data-ferr="laje"><span class="ico">⬛</span>Laje</button>
     <button data-ferr="coluna"><span class="ico">▮</span>Coluna</button>
     <button data-ferr="escada"><span class="ico">🪜</span>Escada</button>
+    <button data-ferr="rampa"><span class="ico">♿</span>Rampa</button>
     <button data-ferr="telhado"><span class="ico">🏠</span>Telhado</button>
     <button data-ferr="objeto"><span class="ico">🛋️</span>Objeto</button>
     <button data-ferr="pontoInst"><span class="ico">⚡</span>Instalação</button>
@@ -188,6 +190,12 @@
   </div>
 </div>
 
+<div id="tourBarra" style="display:none; position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:#2b2f36; color:#eee; border-radius:10px; padding:10px 16px; z-index:70; display:flex; align-items:center; gap:12px; box-shadow:0 4px 20px rgba(0,0,0,.4)">
+  <button id="btnTourAnt" style="padding:6px 12px;cursor:pointer;border-radius:6px;border:1px solid #4a4f58;background:#3a3f47;color:#eee">◀</button>
+  <b id="tourTitulo" style="min-width:220px;text-align:center;font-size:14px"></b>
+  <button id="btnTourProx" style="padding:6px 12px;cursor:pointer;border-radius:6px;border:1px solid #4a4f58;background:#3a3f47;color:#eee">▶</button>
+  <button id="btnTourSair" style="padding:6px 12px;cursor:pointer;border-radius:6px;border:1px solid #c62828;background:#c62828;color:#fff">✕ Sair</button>
+</div>
 <div id="modalVista" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:50; align-items:center; justify-content:center">
   <div style="background:#fff; border-radius:8px; padding:12px; width:82vw; height:82vh; display:flex; flex-direction:column">
     <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px">
