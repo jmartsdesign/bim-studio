@@ -13,7 +13,7 @@ Não precisa instalar nada. Basta dar **duplo clique no `index.html`** em um nav
 | Categoria | Recurso |
 |---|---|
 | **Desenho 2D** | Planta com grade métrica, snap ajustável (0,25 m padrão), zoom (roda do mouse) e pan (botão do meio ou Espaço + arrastar) |
-| **Ferramentas** | Parede, Porta, Janela (peitoril), Laje, Coluna, Escada, **Rampa de acessibilidade (NBR 9050)**, Telhado, Objeto, Medir, Corte, Apagar |
+| **Ferramentas** | Parede, Porta, Janela (peitoril), Laje, Coluna, Escada, Rampa NBR 9050 (patamares), **Viga (dimensionamento NBR 6118)**, Telhado, Objeto, **Texto/anotações**, Medir, Corte, Apagar |
 | **3D** | Vista orbital simultânea com paredes, aberturas recortadas, lajes, colunas e sombras |
 | **Propriedades** | Painel para editar dimensões, espessuras, posição de porta/janela na parede, peitoril |
 | **Pavimentos** | Múltiplos pavimentos com altura piso-a-piso configurável; isolamento por pavimento |
@@ -23,6 +23,7 @@ Não precisa instalar nada. Basta dar **duplo clique no `index.html`** em um nav
 | **IFC** | Exportação IFC4 (`.ifc`) com paredes, aberturas vazadas, lajes, colunas, escada, telhado e mobiliário (IfcFurniture) |
 | **Apresentação** | Botão "▶ Apresentar": tour guiado pelas vistas (planta, cortes, fachadas, estudos, memorial) com navegação por setas/teclado |
 | **Cortes/Fachadas** | **Múltiplas linhas de corte** (A—A, B—B, C—C...) com rótulos automáticos e seletor no modal; cotas verticais completas; fachadas nas 4 orientações |
+| **OSNAP** | Snap a extremos, pontos médios, interseções, **centros de colunas e centróides de lajes** + snap magnético a paredes (F3) |
 | **Camadas** | Paleta por disciplina — Arquitetura, Elétrica (amarelo), Hidráulica (azul) — com visibilidade seletiva em 2D, 3D e pranchas |
 | **Instalações** | 8 pontos: tomada, interruptor, luminária, quadro (elétrica); registro, torneira, ralo, caixa d'água (hidráulica) — símbolos 2D com leader e exportação IFC |
 | **Norte** | Rosa dos ventos na planta (editor e prancha) com orientação configurável em graus |
@@ -56,6 +57,7 @@ Não precisa instalar nada. Basta dar **duplo clique no `index.html`** em um nav
 | `E` | Escada | | `P` | Ponto de instalação |
 | `R` | Rampa | | `Q` | Circuito elétrico |
 | `T` | Telhado | | `O` | Objeto |
+| `V` | Viga (NBR 6118) | | `A` | Texto/anotação |
 
 ### Comandos de navegação 2D (estilo CAD)
 
