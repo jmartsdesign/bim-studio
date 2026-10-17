@@ -13,14 +13,14 @@ Não precisa instalar nada. Basta dar **duplo clique no `index.html`** em um nav
 | Categoria | Recurso |
 |---|---|
 | **Desenho 2D** | Planta com grade métrica, snap ajustável (0,25 m padrão), zoom (roda do mouse) e pan (botão do meio ou Espaço + arrastar) |
-| **Ferramentas** | Parede, Porta, Janela (peitoril), Laje, Coluna, Escada, Rampa NP EN 17210 (patamares DL 163/2006), **Viga (Eurocódigo 2)**, Telhado, Objeto, **Texto/anotações**, Medir, Corte, Apagar |
+| **Ferramentas** | Parede, Porta, Janela (peitoril), Laje, Coluna, Escada, Rampa de acessibilidade (NP EN 17210: inclinação máx. 8%, patamares de 1,50 m), **Viga (Eurocódigo 2)**, Telhado, Objeto, **Texto/anotações**, Medir, Corte, Apagar |
 | **3D** | Vista orbital simultânea com paredes, aberturas recortadas, lajes, colunas e sombras |
 | **Propriedades** | Painel para editar dimensões, espessuras, posição de porta/janela na parede, peitoril |
 | **Pavimentos** | Múltiplos pavimentos com altura piso-a-piso configurável; isolamento por pavimento |
 | **Arquivo** | Salvar/abrir projeto `.json`, salvamento automático no navegador |
 | **Edição** | Desfazer (Ctrl+Z) / Refazer (Ctrl+Shift+Z), excluir (Delete) |
 | **Cotas** | Cotas automáticas de comprimento nas paredes (ativáveis na barra superior) |
-| **IFC** | Exportação IFC4 (`.ifc`) com paredes, aberturas vazadas, lajes, colunas, escada, telhado e mobiliário (IfcFurniture) |
+| **IFC** | Exportação IFC4 (`.ifc`) com paredes, aberturas vazadas, lajes, colunas, **vigas (IfcBeam)**, **rampas (IfcRamp)**, escada, telhado de 2 águas (IfcRoof .GABLE_ROOF.) e mobiliário (IfcFurniture) |
 | **Apresentação** | Botão "▶ Apresentar": tour guiado pelas vistas (planta, cortes, fachadas, estudos, memorial) com navegação por setas/teclado |
 | **Cortes/Fachadas** | **Múltiplas linhas de corte** (A—A, B—B, C—C...) com rótulos automáticos e seletor no modal; cotas verticais completas; fachadas nas 4 orientações |
 | **OSNAP** | Snap a extremos, pontos médios, interseções, **centros de colunas e centróides de lajes** + snap magnético a paredes (F3) |
@@ -28,12 +28,12 @@ Não precisa instalar nada. Basta dar **duplo clique no `index.html`** em um nav
 | **Instalações** | 8 pontos: tomada, interruptor, luminária, quadro (elétrica); registro, torneira, ralo, caixa d'água (hidráulica) — símbolos 2D com leader e exportação IFC |
 | **Norte** | Rosa dos ventos na planta (editor e prancha) com orientação configurável em graus |
 | **Circuitos** | Ferramenta 🔌 Circuito: traçe a fiação (pernas ortogonais) com snap automático em pontos elétricos; painel lista circuitos com metragem; alimenta os quantitativos |
-| **Quantitativos** | Botão "Quantitativos": relatório de obra (comprimento/área/volume de paredes, área/volume de laje, portas, janelas, pontos, fiação) em prancha imprimível + botão **CSV** para ordem de compra |
+| **Quantitativos** | Botão "Quantitativos": relatório de obra (comprimento/área/volume de paredes, área/volume de laje, portas, janelas, pontos, fiação, **vigas em m e m³ de concreto**) em prancha imprimível + botão **CSV** para ordem de compra |
 | **Sol** | Simulação de sombras (posição astronômica real) + **▶ Timelapse** (dia 6h–18h) + botão **Sazonal**: gráfico comparativo das trajetórias do sol nos solstícios 21/6 vs. 21/12 com picos e conclusão |
-| **Iluminação** | Botão "Iluminação": detecção automática de cômodos (flood-fill) com área de piso, área de esquadrias, comparação com o mínimo de 1/6 do piso e veredito ✓/✗ por ambiente |
+| **Iluminação** | Botão "Iluminação": detecção automática de cômodos (flood-fill) com área de piso, área de esquadrias, comparação com o mínimo do RGEU art. 82.º (1/8 do pavimento) e veredito ✓/✗ por ambiente |
 | **Memorial** | Memorial descritivo técnico automático (10 seções) em prancha imprimível |
 | **Ventilação** | Botão "Ventilação": análise de ventilação cruzada por cômodo (aberturas em paredes com eixos divergentes > 60º) com veredito ✓ CRUZADA / ✗ ÚNICA / ✗ SEM ABERTURAS |
-| **Orçamento** | Tabela com preços unitários editáveis (R$), subtotais/total ao vivo, persistidos; CSV completo |
+| **Orçamento** | Tabela com preços unitários editáveis (€), subtotais/total ao vivo, persistidos; CSV completo |
 | **Terreno** | Botão "Criar terreno": malha 25×25 (células 5 m) com relevo padrão; ferramenta ⛰️ **Terreno** esculpta com pincel suave (clique eleva, Shift+clique rebaixa); **curvas de nível** desenhadas na planta (marching squares) e malha 3D |
 | **Tipologias** | "Salvar pavimento como tipologia" + botão **Estampar**: clique na planta para posicionar cópias da unidade (paredes, aberturas com remapeamento de IDs, lajes) — ideal para blocos de apartamentos por pavimento |
 | **Versões** | Autossalvamento com **histórico de até 20 versões** (deduplicação de estados idênticos); painel "Versões" lista com data/hora e botão **Restaurar**; botão "Salvar versão" para snapshots rotulados |
@@ -69,6 +69,16 @@ Não precisa instalar nada. Basta dar **duplo clique no `index.html`** em um nav
 | Zoom Tudo | `ZT` | Igual ao Zoom Extensões |
 
 O ícone **UCS na origem (0,0)** — eixos vermelho (X) e verde (Y) com rótulo — está sempre visível na planta, e o app abre com o desenho enquadrado.
+
+## Critérios normativos aplicados (Portugal)
+
+| Área | Norma | Critério implementado |
+|---|---|---|
+| **Rampas de acessibilidade** | NP EN 17210:2021 (ISO 21542) + DL 163/2006 | Inclinação máx. **8%** (1:12,5); patamar de **1,50 m** a cada segmento de 10 m; aviso visual quando excedida |
+| **Pré-dimensionamento de vigas** | Eurocódigo 2 — NP EN 1992-1-1 | Altura **h ≈ vão/12** (biapoiadas); largura **bw ≈ h/2**; mínimos **20×15 cm**; arredondamento para cima em cm |
+| **Iluminação natural** | RGEU art. 82.º | Área de envidraçado **≥ 1/8 da área do pavimento** por cômodo (detecção automática de ambientes) |
+
+> **Nota**: são regras práticas de pré-dimensionamento/verificação preliminar. Para projeto de execução, os valores devem ser confirmados por engenheiro responsável (cálculo completo do EC2, análise térmica etc.).
 
 Outros: `Ctrl+Z` desfazer · `Ctrl+Shift+Z` refazer · `F` tela cheia da vista sob o mouse · `Delete` excluir selecionado · `ESC` cancelar/sair do tour · setas/espaço navegam o tour.
 

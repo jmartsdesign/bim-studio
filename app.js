@@ -3309,20 +3309,20 @@ $('#btnVent')?.addEventListener('click', mostrarVentilacao);
 // ---------------- Orçamento com preços editáveis ----------------
 // preços padrão por item (R$), editáveis e persistidos no localStorage
 const PRECOS_PADRAO = {
-  'Alvenaria/parede (comprimento)': 95,
-  'Alvenaria/parede (área de parede)': 55,
-  'Alvenaria/parede (volume)': 380,
-  'Laje (área)': 45,
-  'Laje (volume/concreto)': 420,
-  'Portas': 450,
-  'Janelas': 520,
-  'Colunas': 280,
-  'Escadas (lances)': 1800,
-  'Pontos elétricos': 85,
-  'Pontos hidráulicos': 160,
-  'Fiação elétrica (circuitos)': 12,
-  'Vigas (comprimento)': 95,
-  'Vigas (volume/concreto)': 450
+  'Alvenaria/parede (comprimento)': 45,
+  'Alvenaria/parede (área de parede)': 26,
+  'Alvenaria/parede (volume)': 180,
+  'Laje (área)': 22,
+  'Laje (volume/concreto)': 200,
+  'Portas': 210,
+  'Janelas': 240,
+  'Colunas': 130,
+  'Escadas (lances)': 850,
+  'Pontos elétricos': 40,
+  'Pontos hidráulicos': 75,
+  'Fiação elétrica (circuitos)': 6,
+  'Vigas (comprimento)': 45,
+  'Vigas (volume/concreto)': 220
 };
 function obterPrecos() {
   try {
@@ -3357,7 +3357,7 @@ function mostrarOrcamento() {
       <td style="padding:4px 8px;border-bottom:1px solid #ddd;text-align:right">
         <input data-item="${it.item}" type="number" step="0.01" min="0" value="${preco.toFixed(2)}" style="width:90px;text-align:right">
       </td>
-      <td style="padding:4px 8px;border-bottom:1px solid #ddd;text-align:right" data-sub="${it.item}">R$ ${sub.toFixed(2).replace('.', ',')}</td>
+      <td style="padding:4px 8px;border-bottom:1px solid #ddd;text-align:right" data-sub="${it.item}">€ ${sub.toFixed(2).replace('.', ',')}</td>
     </tr>`;
   }).join('');
   box.innerHTML = `
@@ -3365,13 +3365,13 @@ function mostrarOrcamento() {
       <tr style="background:#2b2f36;color:#fff">
         <th style="padding:6px 8px;text-align:left">Item</th>
         <th style="padding:6px 8px;text-align:right">Qtd</th>
-        <th style="padding:6px 8px;text-align:right">Preço unit. (R$)</th>
+        <th style="padding:6px 8px;text-align:right">Preço unit. (€)</th>
         <th style="padding:6px 8px;text-align:right">Subtotal</th>
       </tr>
       ${linhasHtml}
       <tr>
         <td colspan="3" style="padding:8px;text-align:right"><b>TOTAL</b></td>
-        <td style="padding:8px;text-align:right"><b id="totalOrc">R$ ${total.toFixed(2).replace('.', ',')}</b></td>
+        <td style="padding:8px;text-align:right"><b id="totalOrc">€ ${total.toFixed(2).replace('.', ',')}</b></td>
       </tr>
     </table>
     <div style="margin-top:10px;font-size:11px;color:#777">Edite os preços — os subtotais recalculam e ficam salvos no navegador.</div>`;
@@ -3390,7 +3390,7 @@ $('#btnOrc')?.addEventListener('click', mostrarOrcamento);
 function exportarCSVOrcamento() {
   const { itens } = calcularQuantitativos();
   const precos = obterPrecos();
-  const linhas = ['Item;Quantidade;Unidade;Preco unitario (R$);Subtotal (R$)'];
+  const linhas = ['Item;Quantidade;Unidade;Preco unitario (EUR);Subtotal (EUR)'];
   let total = 0;
   for (const it of itens) {
     const preco = precos[it.item] ?? 0;
