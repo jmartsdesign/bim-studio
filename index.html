@@ -105,6 +105,11 @@
   #tourBarra button { padding: 6px 12px; cursor: pointer; border-radius: 6px; border: 1px solid var(--borda); background: #222a31; color: var(--texto); }
   #tourTitulo { min-width: 220px; text-align: center; font-size: 14px; }
 
+  /* botão de tela cheia */
+  .btn-telacheia { position: absolute; top: 6px; right: 8px; padding: 2px 8px; font-size: 13px; cursor: pointer;
+    background: rgba(255,255,255,.85); border: 1px solid #bbb; border-radius: 3px; color: #555; z-index: 5; }
+  .btn-telacheia:hover { background: #fff; }
+
   /* dropdown de fachadas */
   #wrapFachada { position: relative; }
   #menuFachadas { display: none; position: absolute; top: 100%; left: 0; background: var(--bg-painel); border: 1px solid var(--borda); border-radius: 4px; z-index: 60; min-width: 120px; box-shadow: 0 6px 18px rgba(0,0,0,.5); }
@@ -125,9 +130,9 @@
 <!-- Barra de título -->
 <div id="barraTitulo">
   <div class="logo">BIM<span>Studio</span></div>
-  <button id="btnNovo">📄 Novo</button>
-  <button id="btnAbrir">📂 Abrir</button>
-  <button id="btnSalvar">💾 Salvar</button>
+  <button id="btnNovo" title="Criar novo projeto">📄 Novo</button>
+  <button id="btnAbrir" title="Abrir projeto .json">📂 Abrir</button>
+  <button id="btnSalvar" title="Salvar projeto .json">💾 Salvar</button>
   <span id="infoProj"></span>
   <input type="file" id="arquivoProj" accept=".json">
 </div>
@@ -146,49 +151,49 @@
   <div class="conteudo-aba ativa" data-aba="arquitetura">
     <div class="grupo">
       <div class="linha-botoes">
-        <button class="btn-ribbon" id="btnDesfazer"><span class="ico">↶</span>Desfazer</button>
-        <button class="btn-ribbon" id="btnRefazer"><span class="ico">↷</span>Refazer</button>
-        <button class="btn-ribbon" data-ferr="selecionar"><span class="ico">↖</span>Selecionar</button>
-        <button class="btn-ribbon" data-ferr="medir"><span class="ico">📏</span>Medir</button>
-        <button class="btn-ribbon" data-ferr="apagar"><span class="ico">🗑️</span>Apagar</button>
+        <button class="btn-ribbon" id="btnDesfazer" title="Desfazer (Ctrl+Z)"><span class="ico">↶</span>Desfazer</button>
+        <button class="btn-ribbon" id="btnRefazer" title="Refazer (Ctrl+Shift+Z / Ctrl+Y)"><span class="ico">↷</span>Refazer</button>
+        <button class="btn-ribbon" data-ferr="selecionar" title="Selecionar elementos (S)"><span class="ico">↖</span>Selecionar</button>
+        <button class="btn-ribbon" data-ferr="medir" title="Medir distância livre (M)"><span class="ico">📏</span>Medir</button>
+        <button class="btn-ribbon" data-ferr="apagar" title="Apagar elemento (X)"><span class="ico">🗑️</span>Apagar</button>
       </div>
       <span class="rotulo-grupo">Edição</span>
     </div>
     <div class="grupo">
       <div class="linha-botoes">
-        <button class="btn-ribbon grande" data-ferr="parede"><span class="ico">▬</span>Parede</button>
-        <button class="btn-ribbon grande" data-ferr="porta"><span class="ico">🚪</span>Porta</button>
-        <button class="btn-ribbon grande" data-ferr="janela"><span class="ico">🪟</span>Janela</button>
+        <button class="btn-ribbon grande" data-ferr="parede" title="Desenhar parede — clique pontos encadeados (W)"><span class="ico">▬</span>Parede</button>
+        <button class="btn-ribbon grande" data-ferr="porta" title="Inserir porta numa parede (D)"><span class="ico">🚪</span>Porta</button>
+        <button class="btn-ribbon grande" data-ferr="janela" title="Inserir janela numa parede (J)"><span class="ico">🪟</span>Janela</button>
       </div>
       <span class="rotulo-grupo">Vedações</span>
     </div>
     <div class="grupo">
       <div class="linha-botoes">
-        <button class="btn-ribbon grande" data-ferr="laje"><span class="ico">⬛</span>Laje</button>
-        <button class="btn-ribbon grande" data-ferr="coluna"><span class="ico">▮</span>Coluna</button>
-        <button class="btn-ribbon grande" data-ferr="escada"><span class="ico">🪜</span>Escada</button>
-        <button class="btn-ribbon grande" data-ferr="rampa"><span class="ico">♿</span>Rampa</button>
+        <button class="btn-ribbon grande" data-ferr="laje" title="Desenhar laje por polígono (L)"><span class="ico">⬛</span>Laje</button>
+        <button class="btn-ribbon grande" data-ferr="coluna" title="Inserir coluna (C)"><span class="ico">▮</span>Coluna</button>
+        <button class="btn-ribbon grande" data-ferr="escada" title="Desenhar escada — início e fim (E)"><span class="ico">🪜</span>Escada</button>
+        <button class="btn-ribbon grande" data-ferr="rampa" title="Desenhar rampa de acessibilidade (R)"><span class="ico">♿</span>Rampa</button>
       </div>
       <span class="rotulo-grupo">Estrutura</span>
     </div>
     <div class="grupo">
       <div class="linha-botoes">
-        <button class="btn-ribbon grande" data-ferr="telhado"><span class="ico">🏠</span>Telhado</button>
-        <button class="btn-ribbon grande" data-ferr="objeto"><span class="ico">🛋️</span>Objeto</button>
+        <button class="btn-ribbon grande" data-ferr="telhado" title="Desenhar telhado por polígono (T)"><span class="ico">🏠</span>Telhado</button>
+        <button class="btn-ribbon grande" data-ferr="objeto" title="Inserir objeto da biblioteca (O)"><span class="ico">🛋️</span>Objeto</button>
       </div>
       <span class="rotulo-grupo">Complementos</span>
     </div>
     <div class="grupo">
       <div class="linha-botoes">
-        <button class="btn-ribbon grande" data-ferr="corte"><span class="ico">✂️</span>Corte</button>
-        <button class="btn-ribbon grande" data-ferr="terreno"><span class="ico">⛰️</span>Terreno</button>
+        <button class="btn-ribbon grande" data-ferr="corte" title="Traçar linha de corte (G)"><span class="ico">✂️</span>Corte</button>
+        <button class="btn-ribbon grande" data-ferr="terreno" title="Esculpir terreno — clique eleva, Shift rebaixa (H)"><span class="ico">⛰️</span>Terreno</button>
       </div>
       <span class="rotulo-grupo">Documentação</span>
     </div>
     <div class="grupo">
       <div class="linha-botoes">
-        <button class="btn-ribbon" id="btnSalvarTip"><span class="ico">⧉</span>Salvar tipologia</button>
-        <button class="btn-ribbon" id="btnTerreno"><span class="ico">🌍</span>Criar terreno</button>
+        <button class="btn-ribbon" id="btnSalvarTip" title="Salvar pavimento como tipologia de unidade"><span class="ico">⧉</span>Salvar tipologia</button>
+        <button class="btn-ribbon" id="btnTerreno" title="Criar malha de terreno 25×25"><span class="ico">🌍</span>Criar terreno</button>
       </div>
       <span class="rotulo-grupo">Tipologia</span>
     </div>
@@ -198,22 +203,22 @@
   <div class="conteudo-aba" data-aba="instalacoes">
     <div class="grupo">
       <div class="linha-botoes">
-        <button class="btn-ribbon grande" data-ferr="pontoInst"><span class="ico">⚡</span>Ponto</button>
-        <button class="btn-ribbon grande" data-ferr="circuito"><span class="ico">🔌</span>Circuito</button>
+        <button class="btn-ribbon grande" data-ferr="pontoInst" title="Inserir ponto de instalação (P)"><span class="ico">⚡</span>Ponto</button>
+        <button class="btn-ribbon grande" data-ferr="circuito" title="Traçar circuito elétrico (Q)"><span class="ico">🔌</span>Circuito</button>
       </div>
       <span class="rotulo-grupo">Ferramentas</span>
     </div>
     <div class="grupo">
       <div class="linha-botoes">
-        <button class="btn-ribbon" id="btnIlum"><span class="ico">💡</span>Iluminação</button>
-        <button class="btn-ribbon" id="btnVent"><span class="ico">🌬️</span>Ventilação</button>
+        <button class="btn-ribbon" id="btnIlum" title="Relatório de iluminação natural por cômodo"><span class="ico">💡</span>Iluminação</button>
+        <button class="btn-ribbon" id="btnVent" title="Análise de ventilação cruzada"><span class="ico">🌬️</span>Ventilação</button>
       </div>
       <span class="rotulo-grupo">Ambiental</span>
     </div>
     <div class="grupo">
       <div class="linha-botoes">
-        <button class="btn-ribbon" id="btnSazonal"><span class="ico">☀️</span>Sazonal</button>
-        <button class="btn-ribbon" id="btnTimelapse"><span class="ico">▶</span>Timelapse</button>
+        <button class="btn-ribbon" id="btnSazonal" title="Comparar trajetória do sol nos solstícios"><span class="ico">☀️</span>Sazonal</button>
+        <button class="btn-ribbon" id="btnTimelapse" title="Anima o sol de 6h às 18h"><span class="ico">▶</span>Timelapse</button>
         <label class="btn-ribbon" style="cursor:pointer"><input type="checkbox" id="chkSol"> Sombras</label>
       </div>
       <span class="rotulo-grupo">Sol</span>
@@ -231,27 +236,27 @@
   <div class="conteudo-aba" data-aba="analise">
     <div class="grupo">
       <div class="linha-botoes">
-        <button class="btn-ribbon grande" id="btnQuant"><span class="ico">📋</span>Quantitativos</button>
-        <button class="btn-ribbon grande" id="btnCSV"><span class="ico">📈</span>CSV quant.</button>
+        <button class="btn-ribbon grande" id="btnQuant" title="Quantitativos / ordem de compra"><span class="ico">📋</span>Quantitativos</button>
+        <button class="btn-ribbon grande" id="btnCSV" title="Exportar quantitativos em CSV"><span class="ico">📈</span>CSV quant.</button>
       </div>
       <span class="rotulo-grupo">Medições</span>
     </div>
     <div class="grupo">
       <div class="linha-botoes">
-        <button class="btn-ribbon grande" id="btnOrc"><span class="ico">💰</span>Orçamento</button>
-        <button class="btn-ribbon grande" id="btnCSVOrc"><span class="ico">📊</span>CSV orç.</button>
+        <button class="btn-ribbon grande" id="btnOrc" title="Orçamento com preços editáveis"><span class="ico">💰</span>Orçamento</button>
+        <button class="btn-ribbon grande" id="btnCSVOrc" title="Exportar orçamento em CSV"><span class="ico">📊</span>CSV orç.</button>
       </div>
       <span class="rotulo-grupo">Custos</span>
     </div>
     <div class="grupo">
       <div class="linha-botoes">
-        <button class="btn-ribbon grande" id="btnMemorial"><span class="ico">📝</span>Memorial</button>
+        <button class="btn-ribbon grande" id="btnMemorial" title="Memorial descritivo automático"><span class="ico">📝</span>Memorial</button>
       </div>
       <span class="rotulo-grupo">Documentação</span>
     </div>
     <div class="grupo">
       <div class="linha-botoes">
-        <button class="btn-ribbon grande" id="btnVersaoManual"><span class="ico">💾</span>Salvar versão</button>
+        <button class="btn-ribbon grande" id="btnVersaoManual" title="Salvar versão rotulada do projeto"><span class="ico">💾</span>Salvar versão</button>
       </div>
       <span class="rotulo-grupo">Controle</span>
     </div>
@@ -261,10 +266,10 @@
   <div class="conteudo-aba" data-aba="vista">
     <div class="grupo">
       <div class="linha-botoes">
-        <button class="btn-ribbon grande" id="btnPlanta"><span class="ico">🗺️</span>Planta</button>
-        <button class="btn-ribbon grande" id="btnCorte"><span class="ico">✂️</span>Gerar corte</button>
+        <button class="btn-ribbon grande" id="btnPlanta" title="Gerar prancha de planta 2D"><span class="ico">🗺️</span>Planta</button>
+        <button class="btn-ribbon grande" id="btnCorte" title="Gerar corte da linha selecionada"><span class="ico">✂️</span>Gerar corte</button>
         <span id="wrapFachada">
-          <button class="btn-ribbon grande" id="btnFachada"><span class="ico">🏢</span>Fachada ▾</button>
+          <button class="btn-ribbon grande" id="btnFachada" title="Gerar fachada (Sul/Norte/Leste/Oeste)"><span class="ico">🏢</span>Fachada ▾</button>
           <span id="menuFachadas">
             <button data-fachada="sul">Sul</button>
             <button data-fachada="norte">Norte</button>
@@ -290,7 +295,7 @@
     </div>
     <div class="grupo">
       <div class="linha-botoes">
-        <button class="btn-ribbon grande" id="btnTour"><span class="ico">▶</span>Apresentar</button>
+        <button class="btn-ribbon grande" id="btnTour" title="Tour guiado pelas vistas (setas navegam)"><span class="ico">▶</span>Apresentar</button>
       </div>
       <span class="rotulo-grupo">Tour</span>
     </div>
@@ -300,7 +305,7 @@
   <div class="conteudo-aba" data-aba="arquivo">
     <div class="grupo">
       <div class="linha-botoes">
-        <button class="btn-ribbon grande" id="btnIFC"><span class="ico">🏗️</span>Exportar IFC</button>
+        <button class="btn-ribbon grande" id="btnIFC" title="Exportar modelo IFC4"><span class="ico">🏗️</span>Exportar IFC</button>
       </div>
       <span class="rotulo-grupo">Modelo</span>
     </div>
@@ -349,11 +354,13 @@
     <div id="area2d">
       <canvas id="cv2d"></canvas>
       <span class="rotulo-canvas">Planta 2D</span>
+      <button class="btn-telacheia" data-fullscreen="#area2d" title="Tela cheia (F)">⛶</button>
       <span id="dica2d">Roda: zoom · Meio/Espaço: mover · Duplo clique: fechar polígono</span>
     </div>
     <div id="area3d">
       <canvas id="cv3d"></canvas>
       <span class="rotulo-canvas">3D — arraste para orbitar</span>
+      <button class="btn-telacheia" data-fullscreen="#area3d" title="Tela cheia (F)">⛶</button>
     </div>
   </div>
 
@@ -381,10 +388,10 @@
 
 <!-- Barra do tour -->
 <div id="tourBarra">
-  <button id="btnTourAnt">◀</button>
+  <button id="btnTourAnt" title="Vista anterior (←)">◀</button>
   <b id="tourTitulo"></b>
-  <button id="btnTourProx">▶</button>
-  <button id="btnTourSair" style="border-color:#c62828;background:#c62828;color:#fff">✕ Sair</button>
+  <button id="btnTourProx" title="Próxima vista (→)">▶</button>
+  <button id="btnTourSair" title="Encerrar tour (ESC)" style="border-color:#c62828;background:#c62828;color:#fff">✕ Sair</button>
 </div>
 
 <!-- Modal de vistas -->
@@ -400,9 +407,9 @@
         <option value="125">1:125</option>
         <option value="200">1:200</option>
       </select></label>
-      <button id="btnPNG">🖼️ PNG</button>
-      <button id="btnImprimir">🖨️ Imprimir / PDF</button>
-      <button id="btnFecharVista" style="margin-left:auto">Fechar ✕</button>
+      <button id="btnPNG" title="Salvar vista como PNG">🖼️ PNG</button>
+      <button id="btnImprimir" title="Imprimir / salvar PDF">🖨️ Imprimir / PDF</button>
+      <button id="btnFecharVista" title="Fechar vista (ESC)" style="margin-left:auto">Fechar ✕</button>
     </div>
     <canvas id="cvVista"></canvas>
     <div id="tabelaOrcamento"></div>

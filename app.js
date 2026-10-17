@@ -1154,6 +1154,66 @@ function sincronizar() {
 }
 
 // ---------------- Barra de ferramentas ----------------
+// ---- atalhos de teclado por ferramenta (estilo Revit) ----
+const ATALHOS_FERRAMENTA = {
+  's': 'selecionar', 'm': 'medir', 'x': 'apagar',
+  'w': 'parede', 'd': 'porta', 'j': 'janela',
+  'l': 'laje', 'c': 'coluna', 'e': 'escada', 'r': 'rampa',
+  't': 'telhado', 'o': 'objeto',
+  'g': 'corte', 'h': 'terreno',
+  'p': 'pontoInst', 'q': 'circuito',
+};
+function ativarFerramenta(nome) {
+  const botao = document.querySelector(`.btn-ribbon[data-ferr="${nome}"]`);
+  if (botao) botao.click();
+}
+window.addEventListener('keydown', ev => {
+  // não interceptar quando digitando em inputs
+  if (ev.target.tagName === 'INPUT' || ev.target.tagName === 'SELECT' || ev.target.tagName === 'TEXTAREA') return;
+  if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
+  const tecla = ev.key.toLowerCase();
+  if (ATALHOS_FERRAMENTA[tecla]) {
+    ev.preventDefault();
+    ativarFerramenta(ATALHOS_FERRAMENTA[tecla]);
+  }
+  // F: tela cheia da vista focada
+  if (tecla === 'f') {
+    ev.preventDefault();
+    if (document.fullscreenElement) document.exitFullscreen();
+    else {
+      const alvo = $('#modalVista').style.display !== 'none'
+        ? document.querySelector('#modalVista > div')
+        : (areaSobMouse || document.querySelector('#area2d'));
+      alvo?.requestFullscreen?.();
+    }
+  }
+});
+// rastrear em qual área o mouse está (para o F saber onde abrir tela cheia)
+let areaSobMouse = null;
+['#area2d', '#area3d'].forEach(sel => {
+  const elArea = document.querySelector(sel);
+  if (elArea) {
+    elArea.addEventListener('mouseenter', () => { areaSobMouse = elArea; });
+    elArea.addEventListener('mouseleave', () => { if (areaSobMouse === elArea) areaSobMouse = null; });
+  }
+});
+// botões de tela cheia dos canvases
+document.querySelectorAll('[data-fullscreen]').forEach(b => b.addEventListener('click', () => {
+  const alvo = document.querySelector(b.dataset.fullscreen);
+  if (document.fullscreenElement) document.exitFullscreen();
+  else alvo?.requestFullscreen?.();
+}));
+// tela cheia do modal de vistas
+$('#btnTelaCheiaVista')?.addEventListener('click', () => {
+  const alvo = document.querySelector('#modalVista > div');
+  if (document.fullscreenElement) document.exitFullscreen();
+  else alvo?.requestFullscreen?.();
+});
+// ao entrar/sair de tela cheia, redimensionar os canvas
+document.addEventListener('fullscreenchange', () => {
+  setTimeout(() => { redimensionar(); }, 80);
+});
+
 // ---- abas do ribbon ----
 document.querySelectorAll('#abas li').forEach(l => l.addEventListener('click', () => {
   document.querySelectorAll('#abas li').forEach(x => x.classList.remove('ativa'));
