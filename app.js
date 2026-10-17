@@ -1101,8 +1101,8 @@ function renderizarBiblioteca() {
     elBox.querySelectorAll('[data-ponto]').forEach(d => d.addEventListener('click', () => {
       pontoInstSelecionado = d.dataset.ponto;
       ferramenta = 'pontoInst';
-      document.querySelectorAll('#toolbar button').forEach(x => x.classList.remove('ativo'));
-      document.querySelector('#toolbar button[data-ferr="pontoInst"]')?.classList.add('ativo');
+      document.querySelectorAll('.btn-ribbon[data-ferr]').forEach(x => x.classList.remove('ativo'));
+      document.querySelector('.btn-ribbon[data-ferr="pontoInst"]')?.classList.add('ativo');
       renderizarBiblioteca();
     }));
   }
@@ -1154,8 +1154,16 @@ function sincronizar() {
 }
 
 // ---------------- Barra de ferramentas ----------------
-document.querySelectorAll('#toolbar button').forEach(b => b.addEventListener('click', () => {
-  document.querySelectorAll('#toolbar button').forEach(x => x.classList.remove('ativo'));
+// ---- abas do ribbon ----
+document.querySelectorAll('#abas li').forEach(l => l.addEventListener('click', () => {
+  document.querySelectorAll('#abas li').forEach(x => x.classList.remove('ativa'));
+  l.classList.add('ativa');
+  document.querySelectorAll('.conteudo-aba').forEach(d => d.classList.remove('ativa'));
+  document.querySelector(`.conteudo-aba[data-aba="${l.dataset.aba}"]`)?.classList.add('ativa');
+}));
+
+document.querySelectorAll('.btn-ribbon[data-ferr]').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('.btn-ribbon[data-ferr]').forEach(x => x.classList.remove('ativo'));
   b.classList.add('ativo');
   ferramenta = b.dataset.ferr;
   preview = null;
@@ -1164,7 +1172,7 @@ document.querySelectorAll('#toolbar button').forEach(b => b.addEventListener('cl
   $('#secObjetos').style.display = ferramenta === 'objeto' ? '' : 'none';
   const sp = $('#secPontosInst'); if (sp) sp.style.display = ferramenta === 'pontoInst' ? '' : 'none';
   const sc = $('#secCircuitos'); if (sc) sc.style.display = ferramenta === 'circuito' ? '' : 'none';
-  $('#stFerramenta').textContent = 'Ferramenta: ' + b.textContent.trim();
+  $('#stFerramenta').textContent = b.textContent.trim();
   desenhar2d();
 }));
 
