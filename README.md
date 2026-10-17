@@ -1,6 +1,6 @@
 # BIM Studio — MVP
 
-Um programa BIM simples, inspirado no fluxo de trabalho de editores de arquitetura (como o ArchiCAD), totalmente em **português**. Este é um MVP original — não é uma cópia do ArchiCAD nem usa código ou recursos proprietários dele.
+Um programa BIM simples, inspirado no fluxo de trabalho de editores de arquitetura (ArchiCAD, Autodesk Revit), totalmente em **português** — com ribbon de abas contextuais, navegador de projeto, painel de propriedades e atalhos de teclado. Este é um MVP original — não é uma cópia do ArchiCAD nem usa código ou recursos proprietários dele.
 
 ## Como executar
 
@@ -43,6 +43,21 @@ Não precisa instalar nada. Basta abrir o arquivo `index.html` em um navegador m
 | **Escala configurável** | Seletor no modal: Automática, 1:50, 1:100, 1:125, 1:200 — re-renderiza a vista na hora; escala exata cotada no carimbo |
 | **Planta PDF** | Botão "Planta PDF" gera a planta do pavimento ativo em prancha completa (paredes cotadas, portas, escadas, objetos, carimbo) — imprimível e exportável |
 | **PNG** | Botão "🖼️ PNG" salva qualquer vista gerada (corte, fachada, planta) como imagem PNG |
+
+## Atalhos de teclado (estilo Revit)
+
+| Tecla | Ferramenta | | Tecla | Ferramenta |
+|---|---|---|---|---|
+| `W` | Parede | | `S` | Selecionar |
+| `D` | Porta | | `M` | Medir |
+| `J` | Janela | | `X` | Apagar |
+| `L` | Laje | | `G` | Traçar corte |
+| `C` | Coluna | | `H` | Terreno (esculpir) |
+| `E` | Escada | | `P` | Ponto de instalação |
+| `R` | Rampa | | `Q` | Circuito elétrico |
+| `T` | Telhado | | `O` | Objeto |
+
+Outros: `Ctrl+Z` desfazer · `Ctrl+Shift+Z` refazer · `F` tela cheia da vista sob o mouse · `Delete` excluir selecionado · `ESC` cancelar/sair do tour · setas/espaço navegam o tour.
 
 ## Fluxo básico
 

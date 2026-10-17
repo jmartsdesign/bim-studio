@@ -81,6 +81,67 @@ const CAMADA_TIPOS = {
 const camadaDe = (e) => e.camada || CAMADA_TIPOS[e.tipo] || 'arquitetura';
 const letraCorte = (i) => String.fromCharCode(65 + i); // A, B, C...
 
+// ---- barra de opções contextuais (tipo Revit) ----
+const opcoesFerramenta = {  // valores padrão editáveis na barra
+  parede:   { espessura: 0.15 },
+  porta:    { largura: 0.9, altura: 2.1, peitoril: 0 },
+  janela:   { largura: 1.2, altura: 1.2, peitoril: 1.0 },
+  coluna:   { largura: 0.3, altura2: 0.3 },
+  escada:   { largura: 0.9 },
+  rampa:    { largura: 1.2, desnivel: null },  // null = usa pé-direito do pavimento
+  objeto:    {},
+  pontoInst: {},
+  laje:      { espessura: 0.2 },
+  telhado:   { altura: 1.8, espessura: 0.15 },
+  circuito:  {},
+  corte:     {},
+  terreno:   {},
+  medir:     {},
+  selecionar:{},
+  apagar:    {},
+};
+const DICAS_FERR = {
+  parede: 'Clique pontos na grade — as paredes se encadeiam; clique direito ou ESC finaliza.',
+  porta: 'Clique sobre uma parede para inserir a porta na posição clicada.',
+  janela: 'Clique sobre uma parede — o peitoril é medido do piso do pavimento.',
+  laje: 'Clique os vértices; duplo clique ou clique perto do 1º ponto fecha o polígono.',
+  coluna: 'Clique o centro da coluna.',
+  escada: 'Clique o início e depois o fim do lance — degraus calculados (~28 cm).',
+  rampa: 'Clique o ponto BAIXO e depois o ALTO — inclinação máx. 8,33% (NBR 9050).',
+  telhado: 'Clique o polígono do beiral; duplo clique fecha.',
+  objeto: 'Escolha o objeto no painel Biblioteca e clique na planta.',
+  pontoInst: 'Escolha o ponto no painel Instalações e clique na planta.',
+  circuito: 'Clique os pontos do trajeto (snap em tomadas); duplo clique finaliza.',
+  corte: 'Clique início e fim da linha de corte — cada corte ganha rótulo (A, B...).',
+  terreno: 'Clique para elevar; Shift+clique para rebaixar (pincel suave).',
+  medir: 'Clique o ponto inicial, mova e clique novamente para fixar a medição.',
+  selecionar: 'Clique num elemento para editar no painel de Propriedades.',
+  apagar: 'Clique no elemento para removê-lo (portas/janelas saem com a parede).',
+};
+
+function renderizarBarraOpcoes() {
+  const nome = $('#opcoesFerrNome'), corpo = $('#opcoesFerrCorpo');
+  if (!nome || !corpo) return;
+  nome.textContent = (nomeTipo(ferramenta) || ferramenta) + ':';
+  const opts = opcoesFerramenta[ferramenta] || {};
+  let html = '';
+  const campo = (chave, rotulo, step) =>
+    `<label>${rotulo}: <input data-opt="${chave}" type="number" step="${step}" value="${opts[chave]}"></label>`;
+  if (ferramenta === 'parede') html = campo('espessura', 'Espessura (m)', 0.01);
+  else if (ferramenta === 'porta') html = campo('largura', 'Largura (m)', 0.05) + campo('altura', 'Altura (m)', 0.05);
+  else if (ferramenta === 'janela') html = campo('largura', 'Largura (m)', 0.05) + campo('altura', 'Altura (m)', 0.05) + campo('peitoril', 'Peitoril (m)', 0.05);
+  else if (ferramenta === 'coluna') html = campo('largura', 'Largura (m)', 0.05) + campo('altura2', 'Profund. (m)', 0.05);
+  else if (ferramenta === 'escada') html = campo('largura', 'Largura (m)', 0.05);
+  else if (ferramenta === 'rampa') html = campo('largura', 'Largura (m)', 0.05) + `<span class="dica-ferr">desnível: ${andarAtivo().alturaPisoPiso.toFixed(2).replace('.', ',')} m (pé-direito)</span>`;
+  else if (ferramenta === 'laje') html = campo('espessura', 'Espessura (m)', 0.01);
+  else if (ferramenta === 'telhado') html = campo('altura', 'Altura (m)', 0.05) + campo('espessura', 'Espessura (m)', 0.01);
+  if (DICAS_FERR[ferramenta]) html += `<span class="dica-ferr">${DICAS_FERR[ferramenta]}</span>`;
+  corpo.innerHTML = html;
+  corpo.querySelectorAll('input[data-opt]').forEach(i => i.addEventListener('change', () => {
+    opcoesFerramenta[ferramenta][i.dataset.opt] = parseFloat(i.value) || 0;
+  }));
+}
+
 // rampas de acessibilidade (NBR 9050: inclinação máx. 8,33% = 1:12)
 const RAMPAS_CFG = { inclinacaoMax: 8.33 }; // %
 function comprimentoRampa(desnivel, inclinacaoPct) {
@@ -703,7 +764,7 @@ cv2.addEventListener('mousedown', ev => {
     if (preview.pontos.length === 2) {
       const [p1, p2] = preview.pontos;
       projeto.elementos.push({ id: ++uid, tipo: 'parede', andar: projeto.idAndarAtivo,
-        x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y, espessura: 0.15, cor: '#e8e4dc' });
+        x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y, espessura: opcoesFerramenta.parede.espessura, cor: '#e8e4dc' });
       preview = { pontos: [{ ...p2 }] }; // encadeia paredes
       salvarEstado(); sincronizar();
     }
@@ -711,14 +772,14 @@ cv2.addEventListener('mousedown', ev => {
   } else if (ferramenta === 'laje') {
     if (!preview) preview = { pontos: [], fechado: false };
     if (preview.pontos.length >= 3 && Math.hypot(mx - preview.pontos[0].x, my - preview.pontos[0].y) < 0.4) {
-      projeto.elementos.push({ id: ++uid, tipo: 'laje', andar: projeto.idAndarAtivo, pontos: preview.pontos, fechado: true, espessura: 0.2 });
+      projeto.elementos.push({ id: ++uid, tipo: 'laje', andar: projeto.idAndarAtivo, pontos: preview.pontos, fechado: true, espessura: opcoesFerramenta.laje.espessura });
       preview = null; salvarEstado(); sincronizar();
     } else {
       preview.pontos.push({ x: mx, y: my });
     }
     desenhar2d();
   } else if (ferramenta === 'coluna') {
-    projeto.elementos.push({ id: ++uid, tipo: 'coluna', andar: projeto.idAndarAtivo, x: mx, y: my, largura: 0.3, altura2: 0.3 });
+    projeto.elementos.push({ id: ++uid, tipo: 'coluna', andar: projeto.idAndarAtivo, x: mx, y: my, largura: opcoesFerramenta.coluna.largura, altura2: opcoesFerramenta.coluna.altura2 });
     salvarEstado(); sincronizar();
   } else if (ferramenta === 'escada') {
     if (!preview) { preview = { pontos: [{ x: mx, y: my }] }; }
@@ -728,7 +789,7 @@ cv2.addEventListener('mousedown', ev => {
       if (comprimento < 0.5) { alert('Escada muito curta — clique o início e depois o fim da escada.'); return; }
       projeto.elementos.push({ id: ++uid, tipo: 'escada', andar: projeto.idAndarAtivo,
         x: (p1.x + mx) / 2, y: (p1.y + my) / 2,
-        comprimento, largura: 0.9, angulo: Math.atan2(my - p1.y, mx - p1.x),
+        comprimento, largura: opcoesFerramenta.escada.largura, angulo: Math.atan2(my - p1.y, mx - p1.x),
         degraus: Math.max(2, Math.round(comprimento / 0.28)) });
       preview = null; salvarEstado(); sincronizar();
     }
@@ -744,7 +805,7 @@ cv2.addEventListener('mousedown', ev => {
       const inclinacao = (desnivel / comprimento) * 100;
       projeto.elementos.push({ id: ++uid, tipo: 'rampa', andar: projeto.idAndarAtivo,
         x: (p1.x + mx) / 2, y: (p1.y + my) / 2,
-        comprimento, largura: 1.2, angulo: Math.atan2(my - p1.y, mx - p1.x),
+        comprimento, largura: opcoesFerramenta.rampa.largura, angulo: Math.atan2(my - p1.y, mx - p1.x),
         desnivel, inclinacao,
         sentido: { x1: p1.x, y1: p1.y, x2: mx, y2: my } });
       preview = null; salvarEstado(); sincronizar();
@@ -754,7 +815,7 @@ cv2.addEventListener('mousedown', ev => {
     if (!preview) preview = { pontos: [], fechado: false };
     if (preview.pontos.length >= 3 && Math.hypot(mx - preview.pontos[0].x, my - preview.pontos[0].y) < 0.4) {
       projeto.elementos.push({ id: ++uid, tipo: 'telhado', andar: projeto.idAndarAtivo, pontos: preview.pontos, fechado: true,
-        altura: 1.8, espessura: 0.15, tipoTelhado: 'duas-aguas', beiral: 0.5 });
+        altura: opcoesFerramenta.telhado.altura, espessura: opcoesFerramenta.telhado.espessura, tipoTelhado: 'duas-aguas', beiral: 0.5 });
       preview = null; salvarEstado(); sincronizar();
     } else {
       preview.pontos.push({ x: mx, y: my });
@@ -809,7 +870,7 @@ cv2.addEventListener('mousedown', ev => {
     if (!parede) { alert('Clique sobre uma parede para inserir ' + (ferramenta === 'porta' ? 'a porta' : 'a janela') + '.'); return; }
     const d = distanciaNaParede(parede, m.x, m.y);
     const obj = { id: ++uid, tipo: ferramenta, andar: projeto.idAndarAtivo, paredeId: parede.id,
-      distancia: d, largura: ferramenta === 'porta' ? 0.9 : 1.2, altura: ferramenta === 'porta' ? 2.1 : 1.2, peitoril: 1.0 };
+      distancia: d, largura: opcoesFerramenta[ferramenta].largura, altura: opcoesFerramenta[ferramenta].altura, peitoril: opcoesFerramenta[ferramenta].peitoril ?? 0 };
     projeto.elementos.push(obj);
     salvarEstado(); sincronizar();
   } else if (ferramenta === 'selecionar' || ferramenta === 'apagar') {
@@ -842,8 +903,8 @@ cv2.addEventListener('dblclick', () => {
   if ((ferramenta === 'laje' || ferramenta === 'telhado') && preview && preview.pontos.length >= 3) {
     const tipo = ferramenta;
     const comum = { id: ++uid, tipo, andar: projeto.idAndarAtivo, pontos: preview.pontos, fechado: true };
-    if (tipo === 'laje') Object.assign(comum, { espessura: 0.2 });
-    else Object.assign(comum, { altura: 1.8, espessura: 0.15, tipoTelhado: 'duas-aguas', beiral: 0.5 });
+    if (tipo === 'laje') Object.assign(comum, { espessura: opcoesFerramenta.laje.espessura });
+    else Object.assign(comum, { altura: opcoesFerramenta.telhado.altura, espessura: opcoesFerramenta.telhado.espessura, tipoTelhado: 'duas-aguas', beiral: 0.5 });
     projeto.elementos.push(comum);
     preview = null; salvarEstado(); sincronizar();
   } else if (ferramenta === 'parede' || ferramenta === 'escada') { preview = null; desenhar2d(); }
@@ -1227,6 +1288,7 @@ document.querySelectorAll('.btn-ribbon[data-ferr]').forEach(b => b.addEventListe
   b.classList.add('ativo');
   ferramenta = b.dataset.ferr;
   preview = null;
+  renderizarBarraOpcoes();
   if (ferramenta !== 'medir') medicao = null;
   if (ferramenta !== 'corte') { /* linhaCorte persiste para o botão Gerar corte */ }
   $('#secObjetos').style.display = ferramenta === 'objeto' ? '' : 'none';
@@ -3129,6 +3191,7 @@ if (salvo) {
   );
 }
 salvarEstado();
+renderizarBarraOpcoes();
 redimensionar();
 atualizarCamera3d();
 sincronizar();
