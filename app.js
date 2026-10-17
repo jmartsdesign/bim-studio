@@ -53,7 +53,7 @@ const PONTOS_INSTALACOES = {
   registro:    { nome: 'Registro',        disciplina: 'hidraulica', icone: 'R' },
   torneira:    { nome: 'Torneira',        disciplina: 'hidraulica', icone: 'Fa' },
   ralo:        { nome: 'Ralo',            disciplina: 'hidraulica', icone: 'Ra' },
-  caixaAgua:   { nome: 'Caixa d'água',   disciplina: 'hidraulica', icone: 'CA' }
+  caixaAgua:   { nome: 'Caixa d\'água',   disciplina: 'hidraulica', icone: 'CA' }
 };
 Object.keys(PONTOS_INSTALACOES).forEach(k => { PONTOS_INSTALACOES[k].disciplina = PONTOS_INSTALACOES[k].disciplina || PONTOS_INSTALACOES[k].discipline; });
 const dimsObjeto = (e) => {
@@ -832,7 +832,6 @@ cv2.addEventListener('mousemove', ev => {
   else if (ferramenta === 'corte' && corteAtivo != null) { const lc = cortes.find(x => x.id === corteAtivo); if (lc) { lc.x2 = m.x; lc.y2 = m.y; desenhar2d(); } }
   else if (['parede', 'laje', 'telhado', 'escada', 'rampa'].includes(ferramenta) && preview) desenhar2d();
   else atualizarCoordStatus(m);
-  else if (ferramenta === 'selecionar' || ferramenta === 'apagar') { $('#stCoord').textContent = `X: ${m.x.toFixed(2)} m, Y: ${m.y.toFixed(2)} m`; }
 });
 
 cv2.addEventListener('mouseup', () => {
@@ -1003,9 +1002,7 @@ function atualizarPainelProps() {
   });
   $('#btnExcluir').addEventListener('click', () => apagarElemento(e.id));
 }
-function nomeTipo(t) {
-  return { parede: 'Parede', porta: 'Porta', janela: 'Janela', laje: 'Laje', coluna: 'Coluna' }[t] || t;
-}
+
 
 function renderizarPainelAndares() {
   const box = $('#listaAndares');
