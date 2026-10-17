@@ -22,7 +22,7 @@ let idxHistorico = -1;
 let preview = null;          // pontos temporários da ferramenta atual
 let mouse2d = { x: 0, y: 0 }; // coordenadas mundo (m)
 let snap = 0.25;
-let camera2d = { cx: 5, cy: 5, escala: 48 }; // pixels por metro
+let camera2d = { cx: 0, cy: 0, escala: 48 }; // pixels por metro — centrado na ORIGEM
 let arrastando2d = null;    // { tipo: 'pan' | 'mover' | ... }
 let elementoArrastado = null;
 let mostrarCotas = true;
@@ -562,7 +562,16 @@ function desenhar2d() {
     cx2.stroke(); cx2.setLineDash([]);
   }
 
-// retângulo do zoom janela
+// marcador do OSNAP (quadradinho verde no ponto capturado)
+  if (osnapPonto) {
+    const t = mundoParaTela(osnapPonto.x, osnapPonto.y);
+    cx2.strokeStyle = '#00c853'; cx2.lineWidth = 2;
+    cx2.strokeRect(t.x - 5, t.y - 5, 10, 10);
+    cx2.font = '9px sans-serif'; cx2.fillStyle = '#00695c'; cx2.textAlign = 'left';
+    cx2.fillText(osnapPonto.tipo, t.x + 8, t.y - 6);
+  }
+
+  // retângulo do zoom janela
   if (zoomJanelaAtivo) {
     const a = mundoParaTela(zoomJanelaAtivo.x1, zoomJanelaAtivo.y1);
     const b = mundoParaTela(zoomJanelaAtivo.x2, zoomJanelaAtivo.y2);
@@ -928,8 +937,9 @@ cv2.addEventListener('mousedown', ev => {
     desenhar2d();
     return;
   }
-  const m = posMouse2d(ev);
-  const mx = aplicarSnap(m.x), my = aplicarSnap(m.y);
+  // reutilizar a posição já tratada pelo OSNAP/ORTHO do mousemove (mais precisa)
+  const m = (ev.type === 'mousedown') ? mouse2d : posMouse2d(ev);
+  const mx = m.x, my = m.y;
 
   if (ferramenta === 'parede') {
     if (!preview) preview = { pontos: [] };
@@ -1055,8 +1065,26 @@ cv2.addEventListener('mousedown', ev => {
 });
 
 cv2.addEventListener('mousemove', ev => {
-  const m = posMouse2d(ev);
+  let m = posMouse2d(ev);
+  // OSNAP: buscar ponto notável próximo do cursor (em pixels)
+  const os = buscarOsnap(ev.offsetX, ev.offsetY);
+  if (os) {
+    m = { x: os.x, y: os.y };
+    osnapPonto = os;
+  } else {
+    osnapPonto = null;
+    // snap de grade (o existente) quando não há osnap
+    m = { x: aplicarSnap(m.x), y: aplicarSnap(m.y) };
+  }
+  // ORTHO: quando há ponto-base (parede/rampa/escada em traçado), restringir a 90°
+  const base = preview?.pontos?.[preview.pontos.length - 1];
+  if (base && (ferramenta === 'parede' || ferramenta === 'rampa' || ferramenta === 'escada')) {
+    m = aplicarOrtho(base, m);
+  }
   mouse2d = { x: m.x, y: m.y };
+  // coordenadas ao vivo na barra de status (formato CAD)
+  const stC = $('#stCoord');
+  if (stC) stC.textContent = `${m.x.toFixed(2)}, ${m.y.toFixed(2)}`;
   if (arrastando2d?.tipo === 'pan') {
     camera2d.cx -= (ev.clientX - arrastando2d.x) / camera2d.escala;
     camera2d.cy += (ev.clientY - arrastando2d.y) / camera2d.escala;
@@ -1394,6 +1422,72 @@ function sincronizar() {
 }
 
 // ---------------- Barra de ferramentas ----------------
+// ---- ORTHO e OSNAP (estilo CAD) ----
+let orthoAtivo = false;
+let osnapAtivo = true;
+let osnapPonto = null;  // {x, y, tipo} do snap atual
+const OSNAP_RAIO = 12;   // px de tolerância
+
+// pontos notáveis de todas as paredes do pavimento
+function pontosOsnap() {
+  const pts = [];
+  for (const e of projeto.elementos.filter(x => x.andar === projeto.idAndarAtivo && x.tipo === 'parede')) {
+    pts.push({ x: e.x1, y: e.y1, tipo: 'extremo' }, { x: e.x2, y: e.y2, tipo: 'extremo' });
+    pts.push({ x: (e.x1 + e.x2) / 2, y: (e.y1 + e.y2) / 2, tipo: 'médio' });
+    // interseções com outras paredes
+  }
+  // interseções parede×parede
+  const paredes = projeto.elementos.filter(x => x.andar === projeto.idAndarAtivo && x.tipo === 'parede');
+  for (let i = 0; i < paredes.length; i++) for (let j = i + 1; j < paredes.length; j++) {
+    const inter = interseccaoLinhas(
+      { x: paredes[i].x1, y: paredes[i].y1 }, { x: paredes[i].x2, y: paredes[i].y2 },
+      { x: paredes[j].x1, y: paredes[j].y1 }, { x: paredes[j].x2, y: paredes[j].y2 });
+    if (inter && inter.u >= 0 && inter.u <= 1) {
+      const px = paredes[i].x1 + (paredes[i].x2 - paredes[i].x1) * inter.u;
+      const py = paredes[i].y1 + (paredes[i].y2 - paredes[i].y1) * inter.u;
+      pts.push({ x: px, y: py, tipo: 'interseção' });
+    }
+  }
+  return pts;
+}
+// encontrar snap mais próximo do mouse (em pixels)
+function buscarOsnap(mxTela, myTela) {
+  if (!osnapAtivo) return null;
+  let melhor = null, melhorD = OSNAP_RAIO;
+  for (const p of pontosOsnap()) {
+    const t = mundoParaTela(p.x, p.y);
+    const d = Math.hypot(t.x - mxTela, t.y - myTela);
+    if (d < melhorD) { melhorD = d; melhor = p; }
+  }
+  return melhor;
+}
+// aplicar ORTHO: restringe ao ângulo de 90° mais próximo do ponto base
+function aplicarOrtho(pBase, pLivre) {
+  if (!orthoAtivo || !pBase) return pLivre;
+  const dx = pLivre.x - pBase.x, dy = pLivre.y - pBase.y;
+  if (Math.abs(dx) >= Math.abs(dy)) return { x: pLivre.x, y: pBase.y };   // horizontal
+  return { x: pBase.x, y: pLivre.y };                                      // vertical
+}
+
+// ---- toggles da barra de status (F3/F7/F8) ----
+function alternarOrtho() {
+  orthoAtivo = !orthoAtivo;
+  $('#tgOrtho')?.classList.toggle('ativo', orthoAtivo);
+  $('#stModo').textContent = orthoAtivo ? 'ORTHO ativo — desenho restrito a 90°' : '';
+  desenhar2d();
+}
+function alternarOsnap() {
+  osnapAtivo = !osnapAtivo;
+  $('#tgOsnap')?.classList.toggle('ativo', osnapAtivo);
+  $('#stModo').textContent = osnapAtivo ? '' : 'OSNAP desligado';
+  desenhar2d();
+}
+$('#tgOrtho')?.addEventListener('click', alternarOrtho);
+$('#tgOsnap')?.addEventListener('click', alternarOsnap);
+$('#tgGrid')?.addEventListener('click', () => {
+  alert('A grade está sempre visível na planta em intervalos de 1 m.');
+});
+
 // ---- comandos de navegação 2D (estilo CAD) ----
 // bounding de todos os elementos (inclui a origem)
 function limitesDesenho() {
@@ -1461,6 +1555,10 @@ window.addEventListener('keydown', ev => {
   // não interceptar quando digitando em inputs
   if (ev.target.tagName === 'INPUT' || ev.target.tagName === 'SELECT' || ev.target.tagName === 'TEXTAREA') return;
   if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
+  // teclas de função CAD
+  if (ev.key === 'F3') { ev.preventDefault(); alternarOsnap(); return; }
+  if (ev.key === 'F8') { ev.preventDefault(); alternarOrtho(); return; }
+  if (ev.key === 'F7') { ev.preventDefault(); $('#tgGrid')?.click(); return; }
   const tecla = ev.key.toLowerCase();
   // comandos de navegação de 2 letras (ZE, ZT, ZJ, PP)
   if (/^[a-z]$/.test(tecla)) {
