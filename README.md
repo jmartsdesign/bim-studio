@@ -1,10 +1,10 @@
 # BIM Studio — MVP
 
-Um programa BIM simples, inspirado no fluxo de trabalho de editores de arquitetura (como o ArchiCAD), totalmente em **português**. Este é um MVP original — não é uma cópia do ArchiCAD nem usa código ou recursos proprietários dele.
+Um programa BIM simples, inspirado no fluxo de trabalho de editores de arquitetura (ArchiCAD, Autodesk Revit), totalmente em **português** — com ribbon de abas contextuais, navegador de projeto, painel de propriedades e atalhos de teclado. Este é um MVP original — não é uma cópia do ArchiCAD nem usa código ou recursos proprietários dele.
 
 ## Como executar
 
-Não precisa instalar nada. Basta abrir o arquivo `index.html` em um navegador moderno (Chrome, Edge ou Firefox com internet, pois o 3D usa a biblioteca Three.js via CDN).
+Não precisa instalar nada. Basta dar **duplo clique no `index.html`** em um navegador moderno (Chrome, Edge ou Firefox) — funciona direto via `file://`, **inclusive offline** (o Three.js está embutido em `vendor/three.min.js`, sem CDN).
 
 > Dica: se preferir, sirva a pasta com `python3 -m http.server` e acesse `http://localhost:8000`.
 
@@ -13,7 +13,7 @@ Não precisa instalar nada. Basta abrir o arquivo `index.html` em um navegador m
 | Categoria | Recurso |
 |---|---|
 | **Desenho 2D** | Planta com grade métrica, snap ajustável (0,25 m padrão), zoom (roda do mouse) e pan (botão do meio ou Espaço + arrastar) |
-| **Ferramentas** | Parede (encadeada), Porta, Janela (com peitoril), Laje (polígono), Coluna, Escada, Telhado, Objeto (biblioteca), Medir, Corte, Apagar |
+| **Ferramentas** | Parede, Porta, Janela (peitoril), Laje, Coluna, Escada, **Rampa de acessibilidade (NBR 9050)**, Telhado, Objeto, Medir, Corte, Apagar |
 | **3D** | Vista orbital simultânea com paredes, aberturas recortadas, lajes, colunas e sombras |
 | **Propriedades** | Painel para editar dimensões, espessuras, posição de porta/janela na parede, peitoril |
 | **Pavimentos** | Múltiplos pavimentos com altura piso-a-piso configurável; isolamento por pavimento |
@@ -21,6 +21,7 @@ Não precisa instalar nada. Basta abrir o arquivo `index.html` em um navegador m
 | **Edição** | Desfazer (Ctrl+Z) / Refazer (Ctrl+Shift+Z), excluir (Delete) |
 | **Cotas** | Cotas automáticas de comprimento nas paredes (ativáveis na barra superior) |
 | **IFC** | Exportação IFC4 (`.ifc`) com paredes, aberturas vazadas, lajes, colunas, escada, telhado e mobiliário (IfcFurniture) |
+| **Apresentação** | Botão "▶ Apresentar": tour guiado pelas vistas (planta, cortes, fachadas, estudos, memorial) com navegação por setas/teclado |
 | **Cortes/Fachadas** | **Múltiplas linhas de corte** (A—A, B—B, C—C...) com rótulos automáticos e seletor no modal; cotas verticais completas; fachadas nas 4 orientações |
 | **Camadas** | Paleta por disciplina — Arquitetura, Elétrica (amarelo), Hidráulica (azul) — com visibilidade seletiva em 2D, 3D e pranchas |
 | **Instalações** | 8 pontos: tomada, interruptor, luminária, quadro (elétrica); registro, torneira, ralo, caixa d'água (hidráulica) — símbolos 2D com leader e exportação IFC |
@@ -42,6 +43,21 @@ Não precisa instalar nada. Basta abrir o arquivo `index.html` em um navegador m
 | **Escala configurável** | Seletor no modal: Automática, 1:50, 1:100, 1:125, 1:200 — re-renderiza a vista na hora; escala exata cotada no carimbo |
 | **Planta PDF** | Botão "Planta PDF" gera a planta do pavimento ativo em prancha completa (paredes cotadas, portas, escadas, objetos, carimbo) — imprimível e exportável |
 | **PNG** | Botão "🖼️ PNG" salva qualquer vista gerada (corte, fachada, planta) como imagem PNG |
+
+## Atalhos de teclado (estilo Revit)
+
+| Tecla | Ferramenta | | Tecla | Ferramenta |
+|---|---|---|---|---|
+| `W` | Parede | | `S` | Selecionar |
+| `D` | Porta | | `M` | Medir |
+| `J` | Janela | | `X` | Apagar |
+| `L` | Laje | | `G` | Traçar corte |
+| `C` | Coluna | | `H` | Terreno (esculpir) |
+| `E` | Escada | | `P` | Ponto de instalação |
+| `R` | Rampa | | `Q` | Circuito elétrico |
+| `T` | Telhado | | `O` | Objeto |
+
+Outros: `Ctrl+Z` desfazer · `Ctrl+Shift+Z` refazer · `F` tela cheia da vista sob o mouse · `Delete` excluir selecionado · `ESC` cancelar/sair do tour · setas/espaço navegam o tour.
 
 ## Fluxo básico
 
@@ -69,6 +85,6 @@ Não precisa instalar nada. Basta abrir o arquivo `index.html` em um navegador m
 ## Limitações do MVP
 
 - Aberturas no 3D interno são blocos sobrepostos (o vazamento real existe apenas no IFC exportado).
-- O telhado no 3D é uma aproximação visual (duas águas); no IFC é exportado como laje plana na cota do topo.
+- O telhado no 3D é uma aproximação visual (duas águas); a altura recalcula pela inclinação alvo (%) no painel de propriedades; no IFC é exportado como laje plana.
 - O corte/fachada é uma projeção simplificada (paredes e aberturas; sem esconder elementos atrás).
 - Sem DWG, bibliotecas paramétricas externas (GDL/RFA) ou colaboração multiusuário.

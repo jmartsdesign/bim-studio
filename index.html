@@ -3,224 +3,433 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>BIM Studio — MVP</title>
+<title>BIM Studio — Projeto Arquitetônico</title>
 <style>
+  :root {
+    --bg-escuro: #1f2428;
+    --bg-painel: #2b3138;
+    --bg-ribbon: #374149;
+    --bg-ribbon-ativo: #4a5b6b;
+    --texto: #dce3e8;
+    --texto-fraco: #94a3ad;
+    --azul-revit: #2d7ff9;
+    --azul-hover: #3d8dff;
+    --borda: #45505b;
+    --selecao: #3498db;
+  }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  html, body { height: 100%; font-family: "Segoe UI", Arial, sans-serif; font-size: 13px; overflow: hidden; }
-  #topbar { height: 44px; display: flex; align-items: center; gap: 6px; padding: 0 10px;
-            background: #2b2f36; color: #eee; border-bottom: 1px solid #1a1d22; }
-  #topbar button, #toolbar button { cursor: pointer; }
-  #topbar .sep { width: 1px; height: 24px; background: #4a4f58; margin: 0 4px; }
-  #topbar button { background: #3a3f47; color: #eee; border: 1px solid #4a4f58; border-radius: 4px;
-                   padding: 5px 10px; }
-  #topbar button:hover { background: #4a4f58; }
-  #logo { font-weight: 700; color: #7ec8ff; margin-right: 10px; font-size: 14px; }
-  #main { display: flex; height: calc(100% - 44px); }
-  #toolbar { width: 92px; background: #33373e; padding: 8px 6px; display: flex; flex-direction: column; gap: 6px;
-             border-right: 1px solid #1a1d22; }
-  #toolbar button { display: flex; align-items: center; gap: 7px; background: #3a3f47; color: #ddd;
-                    border: 1px solid transparent; border-radius: 5px; padding: 8px 8px; text-align: left; }
-  #toolbar button .ico { font-size: 15px; width: 18px; text-align: center; }
-  #toolbar button:hover { background: #4a4f58; }
-  #toolbar button.ativo { background: #1565c0; border-color: #64b5f6; color: #fff; }
-  #centro { flex: 1; display: flex; flex-direction: column; min-width: 0; }
-  #divisao { flex: 1; display: flex; min-height: 0; }
-  #area2d { flex: 1; position: relative; min-width: 0; background: #f5f6f2; }
-  #area3d { flex: 1; position: relative; min-width: 0; background: #dfe8ee; border-left: 1px solid #b9c4cc; }
+  html, body { height: 100%; font-family: "Segoe UI", Arial, sans-serif; font-size: 13px; overflow: hidden; background: var(--bg-escuro); color: var(--texto); }
+
+  /* ===== Barra de título / acesso rápido ===== */
+  #barraTitulo { height: 38px; display: flex; align-items: center; gap: 10px; padding: 0 12px; background: #171b1f; border-bottom: 1px solid #000; }
+  #barraTitulo .logo { font-weight: 700; font-size: 14px; color: #fff; letter-spacing: .3px; }
+  #barraTitulo .logo span { color: var(--azul-revit); }
+  #btnNovo, #btnAbrir, #btnSalvar { background: transparent; color: var(--texto); border: 1px solid var(--borda); border-radius: 3px; padding: 4px 12px; cursor: pointer; font-size: 12px; }
+  #btnNovo:hover, #btnAbrir:hover, #btnSalvar:hover { background: var(--bg-ribbon); }
+  #infoProj { margin-left: auto; color: var(--texto-fraco); font-size: 12px; }
+  input[type="file"] { display: none; }
+
+  /* ===== Ribbon ===== */
+  #ribbon { background: var(--bg-ribbon); border-bottom: 2px solid var(--azul-revit); }
+  #abas { display: flex; list-style: none; padding: 0 8px; border-bottom: 1px solid var(--borda); }
+  #abas li { padding: 8px 18px; cursor: pointer; color: var(--texto-fraco); font-size: 12.5px; border-bottom: 2px solid transparent; user-select: none; }
+  #abas li:hover { color: var(--texto); }
+  #abas li.ativa { color: #fff; border-bottom-color: var(--azul-revit); background: var(--bg-ribbon-ativo); }
+  .conteudo-aba { display: none; padding: 8px 12px; min-height: 74px; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .conteudo-aba.ativa { display: flex; }
+  .grupo { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 2px 12px; border-right: 1px solid var(--borda); }
+  .grupo:last-child { border-right: none; }
+  .grupo .rotulo-grupo { font-size: 10px; color: var(--texto-fraco); margin-top: 2px; }
+  .linha-botoes { display: flex; gap: 4px; }
+
+  .btn-ribbon { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; min-width: 58px; padding: 6px 8px 4px;
+    background: transparent; color: var(--texto); border: 1px solid transparent; border-radius: 4px; cursor: pointer; font-size: 10.5px; }
+  .btn-ribbon .ico { font-size: 17px; line-height: 1; }
+  .btn-ribbon:hover { background: var(--bg-ribbon-ativo); border-color: var(--borda); }
+  .btn-ribbon.ativo { background: var(--azul-revit); color: #fff; }
+  .btn-ribbon.grande { min-width: 74px; padding: 8px 10px 6px; }
+  .btn-ribbon.grande .ico { font-size: 22px; }
+
+  /* ===== Barra de opções contextuais ===== */
+  #barraOpcoes { min-height: 30px; display: flex; align-items: center; gap: 16px; padding: 3px 14px; background: #2f363e; border-bottom: 1px solid var(--borda); font-size: 11.5px; color: var(--texto); }
+  #barraOpcoes label { display: flex; align-items: center; gap: 5px; color: var(--texto-fraco); }
+  #barraOpcoes input, #barraOpcoes select { width: 58px; padding: 2px 4px; background: #222a31; color: var(--texto); border: 1px solid var(--borda); border-radius: 3px; font-size: 11.5px; }
+  #barraOpcoes .dica-ferr { color: var(--texto-fraco); font-style: italic; }
+
+  /* ===== Layout principal ===== */
+  #principal { display: flex; height: calc(100% - 38px - 106px - 26px - 30px); }
+
+  /* Navegador do projeto (esquerda) */
+  #navegador { width: 230px; background: var(--bg-painel); border-right: 1px solid var(--borda); overflow-y: auto; }
+  #navegador h4 { font-size: 11px; color: var(--texto-fraco); text-transform: uppercase; letter-spacing: .5px; padding: 10px 10px 4px; }
+  .item-nav { display: flex; align-items: center; gap: 8px; padding: 5px 10px; cursor: pointer; color: var(--texto); font-size: 12.5px; }
+  .item-nav:hover { background: #353d46; }
+  .item-nav.ativa { background: var(--azul-revit); color: #fff; }
+  .item-nav input { font-size: 11px; }
+  .botao-nav { width: calc(100% - 16px); margin: 2px 8px 6px; padding: 4px; background: #222a31; color: var(--texto); border: 1px solid var(--borda); border-radius: 3px; cursor: pointer; font-size: 11px; }
+  .botao-nav:hover { background: var(--bg-ribbon-ativo); }
+
+  /* Área central (2D + 3D) */
+  #areaCentral { flex: 1; display: flex; min-width: 0; }
+  #area2d { flex: 1; position: relative; min-width: 0; background: #f0f2ee; }
+  #area3d { flex: 1; position: relative; min-width: 0; background: #d8e2ea; border-left: 1px solid var(--borda); }
   canvas { display: block; width: 100%; height: 100%; }
-  .rotulo-canvas { position: absolute; top: 6px; left: 8px; font-size: 11px; color: #555;
-                   background: rgba(255,255,255,.7); padding: 2px 7px; border-radius: 3px; pointer-events: none; }
-  #dica { position: absolute; bottom: 6px; left: 8px; font-size: 11px; color: #666; pointer-events: none; }
-  #status { height: 26px; background: #2b2f36; color: #9aa3ad; display: flex; align-items: center;
-            gap: 20px; padding: 0 12px; font-size: 12px; border-top: 1px solid #1a1d22; }
-  #painelDir { width: 270px; background: #f4f4f2; border-left: 1px solid #c9cdc9; overflow-y: auto; }
-  .painel-sec { border-bottom: 1px solid #d8dcd8; padding: 8px 10px; }
-  .painel-sec h3 { font-size: 12px; color: #444; text-transform: uppercase; letter-spacing: .4px; margin-bottom: 8px; }
-  #listaAndares { display: flex; flex-direction: column; gap: 4px; }
-  .item-andar { display: flex; align-items: center; gap: 6px; padding: 4px 6px; border-radius: 4px; cursor: pointer;
-                border: 1px solid transparent; }
-  .item-andar:hover { background: #e8ebe8; }
-  .item-andar.ativo { background: #d0e4f7; border-color: #7fb3e0; }
-  .item-andar .nome { flex: 1; }
-  .item-andar input.alt { width: 52px; font-size: 12px; }
-  #listaAndares .botoes-andar { display: flex; gap: 4px; margin-top: 6px; }
-  #listaAndares .botoes-andar button { font-size: 11px; padding: 3px 8px; cursor: pointer; }
+  .rotulo-canvas { position: absolute; top: 6px; left: 8px; font-size: 11px; color: #555; background: rgba(255,255,255,.85); padding: 2px 8px; border-radius: 3px; pointer-events: none; }
+  #dica2d { position: absolute; bottom: 6px; left: 8px; font-size: 10.5px; color: #777; pointer-events: none; }
+
+  /* Painel de propriedades (direita) */
+  #painelProps { width: 262px; background: var(--bg-painel); border-left: 1px solid var(--borda); overflow-y: auto; }
+  #painelProps h4 { font-size: 11px; color: var(--texto-fraco); text-transform: uppercase; letter-spacing: .5px; padding: 10px 10px 4px; }
+  .card { border-bottom: 1px solid var(--borda); padding: 4px 10px 10px; }
+  .card .titulo-card { font-size: 11px; color: var(--texto-fraco); text-transform: uppercase; letter-spacing: .5px; padding: 8px 0 6px; }
   table.props { width: 100%; border-collapse: collapse; }
-  table.props td { padding: 3px 4px; vertical-align: middle; }
-  table.props td:first-child { color: #555; width: 90px; }
-  table.props input { width: 100%; padding: 3px 5px; border: 1px solid #bbb; border-radius: 3px; font-size: 12px; }
-  .vazio { color: #999; font-style: italic; }
-  button.btn-pequeno { font-size: 11px; padding: 3px 8px; cursor: pointer; }
+  table.props td { padding: 3px 2px; vertical-align: middle; font-size: 12px; }
+  table.props td:first-child { color: var(--texto-fraco); width: 92px; }
+  table.props input, .card input, .card select { width: 100%; padding: 3px 5px; background: #222a31; color: var(--texto); border: 1px solid var(--borda); border-radius: 3px; font-size: 12px; }
+  .card input[type="checkbox"] { width: auto; }
+  .vazio { color: var(--texto-fraco); font-style: italic; font-size: 12px; }
+  .lista-scroll { max-height: 180px; overflow-y: auto; }
+  .btn-pequeno { font-size: 11px; padding: 3px 8px; background: #222a31; color: var(--texto); border: 1px solid var(--borda); border-radius: 3px; cursor: pointer; }
+  .btn-pequeno:hover { background: var(--bg-ribbon-ativo); }
+
+  /* ===== Barra de status ===== */
+  #barraStatus { height: 26px; background: #171b1f; color: var(--texto-fraco); display: flex; align-items: center; gap: 24px; padding: 0 12px; font-size: 11.5px; border-top: 1px solid #000; }
+  #barraStatus .sep { width: 1px; height: 14px; background: var(--borda); }
+
+  /* ===== Modal de vistas ===== */
+  #modalVista { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 50; align-items: center; justify-content: center; }
+  #modalVista > div { background: #2b3138; color: var(--texto); border: 1px solid var(--borda); border-radius: 8px; padding: 12px; width: 84vw; height: 84vh; display: flex; flex-direction: column; }
+  #modalVista .barra-titulo-vista { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  #modalVista .barra-titulo-vista b { font-size: 14px; }
+  #modalVista button { padding: 4px 10px; background: #222a31; color: var(--texto); border: 1px solid var(--borda); border-radius: 3px; cursor: pointer; font-size: 12px; }
+  #modalVista button:hover { background: var(--bg-ribbon-ativo); }
+  #cvVista { flex: 1; background: #fdfdfb; border: 1px solid var(--borda); }
+  #tabelaOrcamento { display: none; flex: 1; overflow: auto; background: #fff; color: #222; padding: 10px; }
+
+  /* ===== Barra do tour ===== */
+  #tourBarra { display: none; position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: var(--bg-ribbon); color: var(--texto); border: 1px solid var(--borda); border-radius: 10px; padding: 10px 16px; z-index: 70; align-items: center; gap: 12px; box-shadow: 0 6px 24px rgba(0,0,0,.5); }
+  #tourBarra button { padding: 6px 12px; cursor: pointer; border-radius: 6px; border: 1px solid var(--borda); background: #222a31; color: var(--texto); }
+  #tourTitulo { min-width: 220px; text-align: center; font-size: 14px; }
+
+  /* botão de tela cheia */
+  .btn-telacheia { position: absolute; top: 6px; right: 8px; padding: 2px 8px; font-size: 13px; cursor: pointer;
+    background: rgba(255,255,255,.85); border: 1px solid #bbb; border-radius: 3px; color: #555; z-index: 5; }
+  .btn-telacheia:hover { background: #fff; }
+
+  /* dropdown de fachadas */
+  #wrapFachada { position: relative; }
+  #menuFachadas { display: none; position: absolute; top: 100%; left: 0; background: var(--bg-painel); border: 1px solid var(--borda); border-radius: 4px; z-index: 60; min-width: 120px; box-shadow: 0 6px 18px rgba(0,0,0,.5); }
+  #menuFachadas button { display: block; width: 100%; text-align: left; padding: 7px 14px; background: transparent; border: none; color: var(--texto); font-size: 12px; cursor: pointer; }
+  #menuFachadas button:hover { background: var(--bg-ribbon-ativo); }
+
   @media print {
     body * { visibility: hidden; }
     #modalVista, #modalVista * { visibility: visible; }
     #modalVista { position: absolute; inset: 0; background: #fff; display: flex !important; }
-    #modalVista > div { width: 100%; height: 95vh; border: none; }
-    #btnImprimir, #btnFecharVista, #btnPNG, #selEscala { display: none !important; }
+    #modalVista > div { width: 100%; height: 95vh; border: none; background: #fff; }
+    #btnImprimir, #btnFecharVista, #btnPNG, #selEscala, #selCorte, #tourBarra { display: none !important; }
   }
 </style>
 </head>
 <body>
-<div id="topbar">
-  <span id="logo">BIM Studio</span>
-  <button id="btnNovo">Novo</button>
-  <button id="btnAbrir">Abrir…</button>
-  <button id="btnSalvar">Salvar</button>
-  <div class="sep"></div>
-  <button id="btnDesfazer">↶ Desfazer</button>
-  <button id="btnRefazer">↷ Refazer</button>
-  <button id="btnIFC">Exportar IFC</button>
-  <button id="btnPlanta">Planta PDF</button>
-  <button id="btnQuant">Quantitativos</button>
-  <button id="btnIlum">Iluminação</button>
-  <button id="btnVent">Ventilação</button>
-  <button id="btnSazonal">Sazonal</button>
-  <button id="btnOrc">Orçamento</button>
-  <button id="btnCSVOrc">CSV Orc.</button>
-  <button id="btnTerreno">Criar terreno</button>
-  <button id="btnVersaoManual">Salvar versão</button>
-  <button id="btnMemorial">Memorial</button>
-  <button id="btnCSV">CSV</button>
-  <button id="btnCorte">Gerar corte</button>
-  <span style="position:relative">
-    <button id="btnFachada">Fachada ▾</button>
-    <span id="menuFachadas" style="display:none; position:absolute; top:100%; left:0; background:#3a3f47; border:1px solid #4a4f58; border-radius:4px; z-index:60; min-width:110px">
-      <button data-fachada="sul" style="display:block;width:100%;text-align:left;padding:6px 12px">Sul</button>
-      <button data-fachada="norte" style="display:block;width:100%;text-align:left;padding:6px 12px">Norte</button>
-      <button data-fachada="leste" style="display:block;width:100%;text-align:left;padding:6px 12px">Leste</button>
-      <button data-fachada="oeste" style="display:block;width:100%;text-align:left;padding:6px 12px">Oeste</button>
-    </span>
-  </span>
-  <div class="sep"></div>
-  <label style="color:#9aa3ad"><input id="chkCotas" type="checkbox" checked> Cotas automáticas</label>
-  <div class="sep"></div>
-  <label style="color:#9aa3ad">Snap (m): <input id="inpSnap" type="number" step="0.05" min="0" value="0.25" style="width:52px"></label>
-  <span id="infoProj" style="margin-left:auto;color:#9aa3ad"></span>
-  <input type="file" id="arquivoProj" accept=".json" style="display:none">
+
+<!-- Barra de título -->
+<div id="barraTitulo">
+  <div class="logo">BIM<span>Studio</span></div>
+  <button id="btnNovo" title="Criar novo projeto">📄 Novo</button>
+  <button id="btnAbrir" title="Abrir projeto .json">📂 Abrir</button>
+  <button id="btnSalvar" title="Salvar projeto .json">💾 Salvar</button>
+  <span id="infoProj"></span>
+  <input type="file" id="arquivoProj" accept=".json">
 </div>
-<div id="main">
-  <div id="toolbar">
-    <button data-ferr="selecionar" class="ativo"><span class="ico">↖</span>Selecionar</button>
-    <button data-ferr="parede"><span class="ico">▬</span>Parede</button>
-    <button data-ferr="porta"><span class="ico">🚪</span>Porta</button>
-    <button data-ferr="janela"><span class="ico">🪟</span>Janela</button>
-    <button data-ferr="laje"><span class="ico">⬛</span>Laje</button>
-    <button data-ferr="coluna"><span class="ico">▮</span>Coluna</button>
-    <button data-ferr="escada"><span class="ico">🪜</span>Escada</button>
-    <button data-ferr="telhado"><span class="ico">🏠</span>Telhado</button>
-    <button data-ferr="objeto"><span class="ico">🛋️</span>Objeto</button>
-    <button data-ferr="pontoInst"><span class="ico">⚡</span>Instalação</button>
-    <button data-ferr="circuito"><span class="ico">🔌</span>Circuito</button>
-    <button data-ferr="terreno"><span class="ico">⛰️</span>Terreno</button>
-    <button data-ferr="medir"><span class="ico">📏</span>Medir</button>
-    <button data-ferr="corte"><span class="ico">✂️</span>Corte</button>
-    <button data-ferr="apagar"><span class="ico">🗑️</span>Apagar</button>
-  </div>
-  <div id="centro">
-    <div id="divisao">
-      <div id="area2d">
-        <canvas id="cv2d"></canvas>
-        <span class="rotulo-canvas">Planta 2D — Pavimento: <b id="nomeAndarAtual">1º Pavimento</b></span>
-        <span id="dica">Roda do mouse: zoom · Botão do meio ou Espaço+arrastar: mover · Duplo clique (laje): fechar polígono</span>
+
+<!-- Ribbon -->
+<div id="ribbon">
+  <ul id="abas">
+    <li class="ativa" data-aba="arquitetura">Arquitetura</li>
+    <li data-aba="instalacoes">Instalações</li>
+    <li data-aba="analise">Análise</li>
+    <li data-aba="vista">Vista</li>
+    <li data-aba="arquivo">Exportar</li>
+  </ul>
+
+  <!-- Aba Arquitetura -->
+  <div class="conteudo-aba ativa" data-aba="arquitetura">
+    <div class="grupo">
+      <div class="linha-botoes">
+        <button class="btn-ribbon" id="btnDesfazer" title="Desfazer (Ctrl+Z)"><span class="ico">↶</span>Desfazer</button>
+        <button class="btn-ribbon" id="btnRefazer" title="Refazer (Ctrl+Shift+Z / Ctrl+Y)"><span class="ico">↷</span>Refazer</button>
+        <button class="btn-ribbon" data-ferr="selecionar" title="Selecionar elementos (S)"><span class="ico">↖</span>Selecionar</button>
+        <button class="btn-ribbon" data-ferr="medir" title="Medir distância livre (M)"><span class="ico">📏</span>Medir</button>
+        <button class="btn-ribbon" data-ferr="apagar" title="Apagar elemento (X)"><span class="ico">🗑️</span>Apagar</button>
       </div>
-      <div id="area3d">
-        <canvas id="cv3d"></canvas>
-        <span class="rotulo-canvas">3D — arraste para orbitar · roda para zoom</span>
-      </div>
+      <span class="rotulo-grupo">Edição</span>
     </div>
-    <div id="status">
-      <span id="stCoord">X: —, Y: —</span>
-      <span id="stFerramenta">Ferramenta: Selecionar</span>
-      <span id="stSalvo">Projeto salvo automaticamente</span>
+    <div class="grupo">
+      <div class="linha-botoes">
+        <button class="btn-ribbon grande" data-ferr="parede" title="Desenhar parede — clique pontos encadeados (W)"><span class="ico">▬</span>Parede</button>
+        <button class="btn-ribbon grande" data-ferr="porta" title="Inserir porta numa parede (D)"><span class="ico">🚪</span>Porta</button>
+        <button class="btn-ribbon grande" data-ferr="janela" title="Inserir janela numa parede (J)"><span class="ico">🪟</span>Janela</button>
+      </div>
+      <span class="rotulo-grupo">Vedações</span>
+    </div>
+    <div class="grupo">
+      <div class="linha-botoes">
+        <button class="btn-ribbon grande" data-ferr="laje" title="Desenhar laje por polígono (L)"><span class="ico">⬛</span>Laje</button>
+        <button class="btn-ribbon grande" data-ferr="coluna" title="Inserir coluna (C)"><span class="ico">▮</span>Coluna</button>
+        <button class="btn-ribbon grande" data-ferr="escada" title="Desenhar escada — início e fim (E)"><span class="ico">🪜</span>Escada</button>
+        <button class="btn-ribbon grande" data-ferr="rampa" title="Desenhar rampa de acessibilidade (R)"><span class="ico">♿</span>Rampa</button>
+      </div>
+      <span class="rotulo-grupo">Estrutura</span>
+    </div>
+    <div class="grupo">
+      <div class="linha-botoes">
+        <button class="btn-ribbon grande" data-ferr="telhado" title="Desenhar telhado por polígono (T)"><span class="ico">🏠</span>Telhado</button>
+        <button class="btn-ribbon grande" data-ferr="objeto" title="Inserir objeto da biblioteca (O)"><span class="ico">🛋️</span>Objeto</button>
+      </div>
+      <span class="rotulo-grupo">Complementos</span>
+    </div>
+    <div class="grupo">
+      <div class="linha-botoes">
+        <button class="btn-ribbon grande" data-ferr="corte" title="Traçar linha de corte (G)"><span class="ico">✂️</span>Corte</button>
+        <button class="btn-ribbon grande" data-ferr="terreno" title="Esculpir terreno — clique eleva, Shift rebaixa (H)"><span class="ico">⛰️</span>Terreno</button>
+      </div>
+      <span class="rotulo-grupo">Documentação</span>
+    </div>
+    <div class="grupo">
+      <div class="linha-botoes">
+        <button class="btn-ribbon" id="btnSalvarTip" title="Salvar pavimento como tipologia de unidade"><span class="ico">⧉</span>Salvar tipologia</button>
+        <button class="btn-ribbon" id="btnTerreno" title="Criar malha de terreno 25×25"><span class="ico">🌍</span>Criar terreno</button>
+      </div>
+      <span class="rotulo-grupo">Tipologia</span>
     </div>
   </div>
-  <div id="painelDir">
-    <div class="painel-sec">
-      <h3>Pavimentos</h3>
-      <div id="listaAndares"></div>
+
+  <!-- Aba Instalações -->
+  <div class="conteudo-aba" data-aba="instalacoes">
+    <div class="grupo">
+      <div class="linha-botoes">
+        <button class="btn-ribbon grande" data-ferr="pontoInst" title="Inserir ponto de instalação (P)"><span class="ico">⚡</span>Ponto</button>
+        <button class="btn-ribbon grande" data-ferr="circuito" title="Traçar circuito elétrico (Q)"><span class="ico">🔌</span>Circuito</button>
+      </div>
+      <span class="rotulo-grupo">Ferramentas</span>
     </div>
-    <div class="painel-sec">
-      <h3>Propriedades</h3>
-      <div id="props"><span class="vazio">Nenhum elemento selecionado.</span></div>
+    <div class="grupo">
+      <div class="linha-botoes">
+        <button class="btn-ribbon" id="btnIlum" title="Relatório de iluminação natural por cômodo"><span class="ico">💡</span>Iluminação</button>
+        <button class="btn-ribbon" id="btnVent" title="Análise de ventilação cruzada"><span class="ico">🌬️</span>Ventilação</button>
+      </div>
+      <span class="rotulo-grupo">Ambiental</span>
     </div>
-    <div class="painel-sec">
-      <h3>Camadas</h3>
-      <div id="listaCamadas"></div>
-      <div style="margin-top:6px;font-size:11px;color:#777">Norte: <input id="inpNorte" type="number" step="15" value="0" style="width:44px"> º</div>
+    <div class="grupo">
+      <div class="linha-botoes">
+        <button class="btn-ribbon" id="btnSazonal" title="Comparar trajetória do sol nos solstícios"><span class="ico">☀️</span>Sazonal</button>
+        <button class="btn-ribbon" id="btnTimelapse" title="Anima o sol de 6h às 18h"><span class="ico">▶</span>Timelapse</button>
+        <label class="btn-ribbon" style="cursor:pointer"><input type="checkbox" id="chkSol"> Sombras</label>
+      </div>
+      <span class="rotulo-grupo">Sol</span>
     </div>
-    <div class="painel-sec" id="secObjetos" style="display:none">
-      <h3>Biblioteca de objetos</h3>
+    <div class="grupo">
+      <div class="linha-botoes" style="flex-direction: column; gap: 4px;">
+        <label style="font-size:11px; color: var(--texto-fraco)">Lat: <input id="inpLat" type="number" step="0.5" value="-23.55" style="width:54px"></label>
+        <label style="font-size:11px; color: var(--texto-fraco)">Hora: <input id="inpHora" type="number" step="0.5" min="0" max="24" value="14" style="width:44px"> · Dia: <input id="inpDia" type="number" min="1" max="31" value="21" style="width:36px">/<input id="inpMes" type="number" min="1" max="12" value="3" style="width:32px"></label>
+      </div>
+      <span class="rotulo-grupo">Config. solar</span>
+    </div>
+  </div>
+
+  <!-- Aba Análise -->
+  <div class="conteudo-aba" data-aba="analise">
+    <div class="grupo">
+      <div class="linha-botoes">
+        <button class="btn-ribbon grande" id="btnQuant" title="Quantitativos / ordem de compra"><span class="ico">📋</span>Quantitativos</button>
+        <button class="btn-ribbon grande" id="btnCSV" title="Exportar quantitativos em CSV"><span class="ico">📈</span>CSV quant.</button>
+      </div>
+      <span class="rotulo-grupo">Medições</span>
+    </div>
+    <div class="grupo">
+      <div class="linha-botoes">
+        <button class="btn-ribbon grande" id="btnOrc" title="Orçamento com preços editáveis"><span class="ico">💰</span>Orçamento</button>
+        <button class="btn-ribbon grande" id="btnCSVOrc" title="Exportar orçamento em CSV"><span class="ico">📊</span>CSV orç.</button>
+      </div>
+      <span class="rotulo-grupo">Custos</span>
+    </div>
+    <div class="grupo">
+      <div class="linha-botoes">
+        <button class="btn-ribbon grande" id="btnMemorial" title="Memorial descritivo automático"><span class="ico">📝</span>Memorial</button>
+      </div>
+      <span class="rotulo-grupo">Documentação</span>
+    </div>
+    <div class="grupo">
+      <div class="linha-botoes">
+        <button class="btn-ribbon grande" id="btnVersaoManual" title="Salvar versão rotulada do projeto"><span class="ico">💾</span>Salvar versão</button>
+      </div>
+      <span class="rotulo-grupo">Controle</span>
+    </div>
+  </div>
+
+  <!-- Aba Vista -->
+  <div class="conteudo-aba" data-aba="vista">
+    <div class="grupo">
+      <div class="linha-botoes">
+        <button class="btn-ribbon grande" id="btnPlanta" title="Gerar prancha de planta 2D"><span class="ico">🗺️</span>Planta</button>
+        <button class="btn-ribbon grande" id="btnCorte" title="Gerar corte da linha selecionada"><span class="ico">✂️</span>Gerar corte</button>
+        <span id="wrapFachada">
+          <button class="btn-ribbon grande" id="btnFachada" title="Gerar fachada (Sul/Norte/Leste/Oeste)"><span class="ico">🏢</span>Fachada ▾</button>
+          <span id="menuFachadas">
+            <button data-fachada="sul">Sul</button>
+            <button data-fachada="norte">Norte</button>
+            <button data-fachada="leste">Leste</button>
+            <button data-fachada="oeste">Oeste</button>
+          </span>
+        </span>
+      </div>
+      <span class="rotulo-grupo">Vistas 2D</span>
+    </div>
+    <div class="grupo">
+      <div class="linha-botoes" style="flex-direction: column; gap: 4px;">
+        <label style="font-size:11px; color: var(--texto-fraco)">Snap (m): <input id="inpSnap" type="number" step="0.05" min="0" value="0.25" style="width:52px"></label>
+        <label style="font-size:11px; color: var(--texto-fraco)"><input type="checkbox" id="chkCotas" checked> Cotas automáticas</label>
+      </div>
+      <span class="rotulo-grupo">Planta</span>
+    </div>
+    <div class="grupo">
+      <div class="linha-botoes" style="flex-direction: column; gap: 4px;">
+        <label style="font-size:11px; color: var(--texto-fraco)">Norte: <input id="inpNorte" type="number" step="15" value="0" style="width:44px"> º</label>
+      </div>
+      <span class="rotulo-grupo">Orientação</span>
+    </div>
+    <div class="grupo">
+      <div class="linha-botoes">
+        <button class="btn-ribbon grande" id="btnTour" title="Tour guiado pelas vistas (setas navegam)"><span class="ico">▶</span>Apresentar</button>
+      </div>
+      <span class="rotulo-grupo">Tour</span>
+    </div>
+  </div>
+
+  <!-- Aba Exportar -->
+  <div class="conteudo-aba" data-aba="arquivo">
+    <div class="grupo">
+      <div class="linha-botoes">
+        <button class="btn-ribbon grande" id="btnIFC" title="Exportar modelo IFC4"><span class="ico">🏗️</span>Exportar IFC</button>
+      </div>
+      <span class="rotulo-grupo">Modelo</span>
+    </div>
+    <div class="grupo">
+      <div class="linha-botoes">
+        <button class="btn-ribbon grande" id="btnImprimir2"><span class="ico">🖨️</span>Imprimir / PDF</button>
+        <button class="btn-ribbon grande" id="btnPNG2"><span class="ico">🖼️</span>Salvar PNG</button>
+      </div>
+      <span class="rotulo-grupo">Documentos</span>
+    </div>
+  </div>
+</div>
+
+<!-- Barra de opções contextuais (opções da ferramenta ativa) -->
+<div id="barraOpcoes">
+  <span id="opcoesFerrNome" style="font-weight:600"></span>
+  <span id="opcoesFerrCorpo" style="display:flex;gap:14px;align-items:center;flex-wrap:wrap"></span>
+</div>
+
+<!-- Corpo principal -->
+<div id="principal">
+  <!-- Navegador do projeto -->
+  <div id="navegador">
+    <h4>Vistas</h4>
+    <div class="item-nav">🗺️ Planta — <span id="nomeAndarAtual">1º Pavimento</span></div>
+    <h4>Pavimentos</h4>
+    <div id="listaAndares"></div>
+    <h4>Camadas</h4>
+    <div id="listaCamadas"></div>
+    <h4>Elementos</h4>
+    <div id="listaElem" class="lista-scroll"></div>
+    <div class="card" id="secObjetos" style="display:none">
+      <div class="titulo-card">Biblioteca de objetos</div>
       <div id="listaObjetos"></div>
     </div>
-    <div class="painel-sec" id="secPontosInst" style="display:none">
-      <h3>Instalações</h3>
+    <div class="card" id="secPontosInst" style="display:none">
+      <div class="titulo-card">Instalações</div>
       <div id="listaPontosInst"></div>
     </div>
-    <div class="painel-sec" id="secCircuitos" style="display:none">
-      <h3>Circuitos</h3>
+    <div class="card" id="secCircuitos" style="display:none">
+      <div class="titulo-card">Circuitos</div>
       <div id="listaCircuitos"></div>
-      <div style="font-size:10px;color:#888;margin-top:4px">Clique para adicionar pontos; duplo clique finaliza.</div>
     </div>
-    <div class="painel-sec">
-      <h3>Tipologias de unidade</h3>
-      <button id="btnSalvarTip" class="btn-pequeno" style="width:100%;margin-bottom:6px">Salvar pavimento como tipologia</button>
-      <div id="listaTipologias"></div>
+    <h4>Tipologias</h4>
+    <div id="listaTipologias"></div>
+    <h4>Versões</h4>
+    <div id="listaVersoes" class="lista-scroll"></div>
+  </div>
+
+  <!-- Área de desenho -->
+  <div id="areaCentral">
+    <div id="area2d">
+      <canvas id="cv2d"></canvas>
+      <span class="rotulo-canvas">Planta 2D</span>
+      <button class="btn-telacheia" data-fullscreen="#area2d" title="Tela cheia (F)">⛶</button>
+      <span id="dica2d">Roda: zoom · Meio/Espaço: mover · Duplo clique: fechar polígono</span>
     </div>
-    <div class="painel-sec">
-      <h3>Versões (autossalve)</h3>
-      <div id="listaVersoes"></div>
+    <div id="area3d">
+      <canvas id="cv3d"></canvas>
+      <span class="rotulo-canvas">3D — arraste para orbitar</span>
+      <button class="btn-telacheia" data-fullscreen="#area3d" title="Tela cheia (F)">⛶</button>
     </div>
-    <div class="painel-sec">
-      <h3>Sol</h3>
-      <label style="font-size:11px"><input id="chkSol" type="checkbox"> Simular sombras</label>
-      <div style="font-size:11px;color:#777;margin-top:4px">
-        Lat: <input id="inpLat" type="number" step="0.5" value="-23.55" style="width:52px"> º<br>
-        Hora: <input id="inpHora" type="number" step="0.5" min="0" max="24" value="14" style="width:44px"> ·
-        Dia: <input id="inpDia" type="number" min="1" max="31" value="21" style="width:36px">/<input id="inpMes" type="number" min="1" max="12" value="3" style="width:32px">
-      </div>
-      <button id="btnTimelapse" class="btn-pequeno" style="margin-top:4px;width:100%">▶ Timelapse</button>
-      <div id="infoSol" style="font-size:10px;color:#c77800;margin-top:4px"></div>
+  </div>
+
+  <!-- Propriedades -->
+  <div id="painelProps">
+    <h4>Propriedades</h4>
+    <div class="card"><div id="props"><span class="vazio">Nenhum elemento selecionado.</span></div></div>
+    <div class="card">
+      <div class="titulo-card">Ferramenta ativa</div>
+      <div id="stFerramenta">Selecionar</div>
     </div>
-    <div class="painel-sec">
-      <h3>Elementos do pavimento</h3>
-      <div id="listaElem"><span class="vazio">Pavimento vazio.</span></div>
+    <div class="card">
+      <div class="titulo-card">Sol / sombras</div>
+      <div id="infoSol" style="font-size:11px;color:#f2a900"></div>
     </div>
   </div>
 </div>
 
-<div id="modalVista" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:50; align-items:center; justify-content:center">
-  <div style="background:#fff; border-radius:8px; padding:12px; width:82vw; height:82vh; display:flex; flex-direction:column">
-    <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px">
-      <b id="tituloVista" style="font-size:14px"></b>
-      <label style="font-size:12px;color:#555">Corte:
-        <select id="selCorte" style="padding:2px 4px">
-          <option value="">Corte A—A</option>
-        </select>
-      </label>
-      <label style="font-size:12px;color:#555">Escala:
-        <select id="selEscala" style="padding:2px 4px">
-          <option value="auto">Automática</option>
-          <option value="50">1:50</option>
-          <option value="100">1:100</option>
-          <option value="125">1:125</option>
-          <option value="200">1:200</option>
-        </select>
-      </label>
-      <button id="btnPNG" style="padding:4px 10px; cursor:pointer">🖼️ PNG</button>
-      <button id="btnImprimir" style="padding:4px 10px; cursor:pointer">🖨️ Imprimir / PDF</button>
-      <button id="btnFecharVista" style="margin-left:auto; padding:4px 10px; cursor:pointer">Fechar ✕</button>
+<!-- Barra de status -->
+<div id="barraStatus">
+  <span id="stCoord">X: —, Y: —</span>
+  <span class="sep"></span>
+  <span>Pronto</span>
+</div>
+
+<!-- Barra do tour -->
+<div id="tourBarra">
+  <button id="btnTourAnt" title="Vista anterior (←)">◀</button>
+  <b id="tourTitulo"></b>
+  <button id="btnTourProx" title="Próxima vista (→)">▶</button>
+  <button id="btnTourSair" title="Encerrar tour (ESC)" style="border-color:#c62828;background:#c62828;color:#fff">✕ Sair</button>
+</div>
+
+<!-- Modal de vistas -->
+<div id="modalVista">
+  <div>
+    <div class="barra-titulo-vista">
+      <b id="tituloVista"></b>
+      <label>Corte: <select id="selCorte" style="background:#222a31;color:#dce3e8;border:1px solid #45505b;border-radius:3px;padding:3px"><option value="">Corte A—A</option></select></label>
+      <label>Escala: <select id="selEscala" style="background:#222a31;color:#dce3e8;border:1px solid #45505b;border-radius:3px;padding:3px">
+        <option value="auto">Automática</option>
+        <option value="50">1:50</option>
+        <option value="100">1:100</option>
+        <option value="125">1:125</option>
+        <option value="200">1:200</option>
+      </select></label>
+      <button id="btnPNG" title="Salvar vista como PNG">🖼️ PNG</button>
+      <button id="btnImprimir" title="Imprimir / salvar PDF">🖨️ Imprimir / PDF</button>
+      <button id="btnFecharVista" title="Fechar vista (ESC)" style="margin-left:auto">Fechar ✕</button>
     </div>
-    <canvas id="cvVista" style="flex:1; background:#fdfdfb; border:1px solid #ccc"></canvas>
-    <div id="tabelaOrcamento" style="display:none; flex:1; overflow:auto; padding-right: 6px"></div>
+    <canvas id="cvVista"></canvas>
+    <div id="tabelaOrcamento"></div>
   </div>
 </div>
 
-<script type="importmap">
-{ "imports": {
-    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
-} }
-</script>
-<script type="module" src="app.js"></script>
+<script src="vendor/three.min.js"></script>
+
+<script src="app.js"></script>
 </body>
 </html>
