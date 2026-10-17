@@ -142,9 +142,21 @@ function renderizarBarraOpcoes() {
 }
 
 // rampas de acessibilidade (NBR 9050: inclinação máx. 8,33% = 1:12)
-const RAMPAS_CFG = { inclinacaoMax: 8.33 }; // %
+const RAMPAS_CFG = { inclinacaoMax: 8.33, maxSegmento: 10, patamar: 1.5 }; // %, m por segmento, patamar m
 function comprimentoRampa(desnivel, inclinacaoPct) {
   return desnivel / (inclinacaoPct / 100);
+}
+// divide uma rampa em segmentos com patamares intermediários (NBR 9050)
+function segmentarRampa(comprimento, largura) {
+  const segs = [];
+  let restante = comprimento;
+  while (restante > 0) {
+    const t = Math.min(RAMPAS_CFG.maxSegmento, restante);
+    segs.push({ tipo: 'rampa', comprimento: t });
+    restante -= t;
+    if (restante > 0) segs.push({ tipo: 'patamar', comprimento: RAMPAS_CFG.patamar });
+  }
+  return segs;
 }
 
 // circuitos elétricos
@@ -303,7 +315,7 @@ function desenhar2d() {
     cx2.restore();
   }
 
-  // rampas (2D)
+  // rampas (2D) — com segmentos e patamares NBR 9050
   for (const e of elems.filter(e => e.tipo === 'rampa')) {
     const p = mundoParaTela(e.x, e.y);
     const L = e.comprimento * camera2d.escala, W = e.largura * camera2d.escala;
@@ -313,6 +325,24 @@ function desenhar2d() {
     cx2.lineWidth = e.id === selecao ? 2 : 1;
     cx2.fillRect(-L / 2, -W / 2, L, W);
     cx2.strokeRect(-L / 2, -W / 2, L, W);
+    // segmentos com patamares (NBR 9050) desenhados por cima
+    if (e.comprimento > RAMPAS_CFG.maxSegmento) {
+      const segs = segmentarRampa(e.comprimento, e.largura);
+      let cursor = -L / 2;
+      for (const s of segs) {
+        const segPx = s.comprimento * camera2d.escala;
+        if (s.tipo === 'patamar') {
+          cx2.fillStyle = 'rgba(46,125,50,.30)';
+          cx2.fillRect(cursor, -W / 2, segPx, W);
+          cx2.strokeStyle = '#2e7d32'; cx2.lineWidth = 1;
+          cx2.strokeRect(cursor, -W / 2, segPx, W);
+          cx2.fillStyle = '#2e7d32'; cx2.font = '9px sans-serif'; cx2.textAlign = 'center';
+          if (segPx > 30) cx2.fillText('patamar', cursor + segPx / 2, 0);
+        }
+        cursor += segPx;
+      }
+      cx2.textAlign = 'center';
+    }
     // seta de sentido (do ponto baixo ao alto) + %
     cx2.strokeStyle = '#456'; cx2.fillStyle = '#456'; cx2.lineWidth = 1.5;
     cx2.beginPath();
@@ -719,10 +749,52 @@ function reconstruir3d() {
       scene.add(m);
     }
 
-    // rampas: cunha (prisma triangular)
+    // rampas: cunha (prisma triangular) — segmentada com patamares NBR 9050
     for (const e of elems.filter(e => e.tipo === 'rampa')) {
       const g = new THREE.BufferGeometry();
       const L = e.comprimento, W = e.largura, D = e.desnivel;
+      if (L > RAMPAS_CFG.maxSegmento) {
+        // construir rampa segmentada: cunhas + patamares ao longo do eixo local
+        const segs = segmentarRampa(L, W);
+        const comprUtil = L; // comprimento inclinado total
+        let cursorLocal = -L / 2;
+        let alturaAcumulada = 0;
+        for (const s of segs) {
+          if (s.tipo === 'rampa') {
+            const frac = s.comprimento / L;
+            const dSeg = D * frac;
+            const gS = new THREE.BufferGeometry();
+            const v = [
+              -s.comprimento/2, 0, -W/2,  s.comprimento/2, dSeg, -W/2,  s.comprimento/2, dSeg, W/2,
+              -s.comprimento/2, 0, -W/2,  s.comprimento/2, dSeg, W/2,  -s.comprimento/2, 0, W/2,
+              -s.comprimento/2, 0, -W/2,  s.comprimento/2, 0, -W/2,  s.comprimento/2, dSeg, -W/2,
+              -s.comprimento/2, 0, W/2,   s.comprimento/2, dSeg, W/2,  s.comprimento/2, 0, W/2
+            ];
+            gS.setAttribute('position', new THREE.BufferAttribute(new Float32Array(v), 3));
+            gS.computeVertexNormals();
+            const mS = new THREE.Mesh(gS, new THREE.MeshLambertMaterial({ color: '#9db8c9', side: THREE.DoubleSide }));
+            const desloc = cursorLocal + s.comprimento / 2;
+            const dx = Math.cos(e.angulo) * desloc, dy = Math.sin(e.angulo) * desloc;
+            mS.position.set(e.x + dx, z0 + alturaAcumulada, -(e.y + dy));
+            mS.rotation.y = e.angulo;
+            mS.castShadow = true;
+            scene.add(mS);
+            alturaAcumulada += dSeg;
+          } else {
+            // patamar: laje plana
+            const gP = new THREE.BoxGeometry(s.comprimento, 0.15, W);
+            const mP = new THREE.Mesh(gP, new THREE.MeshLambertMaterial({ color: '#7ea77e' }));
+            const desloc = cursorLocal + s.comprimento / 2;
+            const dx = Math.cos(e.angulo) * desloc, dy = Math.sin(e.angulo) * desloc;
+            mP.position.set(e.x + dx, z0 + alturaAcumulada - 0.075, -(e.y + dy));
+            mP.rotation.y = e.angulo;
+            mP.castShadow = true;
+            scene.add(mP);
+          }
+          cursorLocal += s.comprimento;
+        }
+        continue; // rampa segmentada desenhada; pular a cunha única
+      }
       // vértices da cunha no espaço local (x ao longo, y altura, z largura)
       const v = [
         -L/2, 0, -W/2,  L/2, D, -W/2,  L/2, D, W/2,   // face superior (rampa)
@@ -1076,6 +1148,11 @@ function atualizarPainelProps() {
              inp('desnivel', 'Desnível (m)', 0.05) +
              `<tr><td>Inclinação</td><td>${e.inclinacao.toFixed(2).replace('.', ',')}% ${ok ? '✓' : '⚠ > 8,33% (NBR 9050)'}</td></tr>` +
              `<tr><td>Compr. mín.</td><td>${comprimentoRampa(e.desnivel, RAMPAS_CFG.inclinacaoMax).toFixed(2).replace('.', ',')} m (p/ 8,33%)</td></tr>`;
+    if (e.comprimento > RAMPAS_CFG.maxSegmento) {
+      const segs = segmentarRampa(e.comprimento, e.largura);
+      const nPat = segs.filter(s => s.tipo === 'patamar').length;
+      linhas += `<tr><td>Patamares</td><td>${nPat} × ${RAMPAS_CFG.patamar.toFixed(2).replace('.', ',')} m (NBR 9050)</td></tr>`;
+    }
   } else if (e.tipo === 'telhado') {
     // vão aproximado: distância média entre vértices opostos
     let vano = 4;
@@ -2925,13 +3002,32 @@ function encerrarTour() {
   $('#tourBarra').style.display = 'none';
   $('#modalVista').style.display = 'none';
 }
-function renderizarPassoTour() {
+function renderizarPassoTour(transicao = true) {
   const passos = passosTour();
   if (!passos.length) return;
   tourPasso = Math.max(0, Math.min(tourPasso, passos.length - 1));
   const p = passos[tourPasso];
   $('#tourTitulo').textContent = `${tourPasso + 1}/${passos.length} — ${p.titulo}`;
+  // transição: escurece, troca a vista, clareia
+  const modal = $('#modalVista');
+  if (transicao && modal.animate) {
+    modal.animate([{ opacity: 0.15 }, { opacity: 1 }], { duration: 320, easing: 'ease-out' });
+  }
   p.acao();
+  renderizarBolinhasTour(passos.length);
+}
+// bolinhas de progresso clicáveis na barra do tour
+function renderizarBolinhasTour(total) {
+  const box = $('#tourBolinhas');
+  if (!box) return;
+  box.innerHTML = '';
+  for (let i = 0; i < total; i++) {
+    const b = document.createElement('span');
+    b.className = 'bolinha-tour' + (i === tourPasso ? ' ativa' : '');
+    b.title = passosTour()[i].titulo;
+    b.addEventListener('click', () => { tourPasso = i; renderizarPassoTour(); });
+    box.appendChild(b);
+  }
 }
 function avancarTour() { tourPasso++; const n = passosTour().length; if (tourPasso >= n) { encerrarTour(); return; } renderizarPassoTour(); }
 function voltarTour() { if (tourPasso > 0) { tourPasso--; renderizarPassoTour(); } }
@@ -3204,15 +3300,39 @@ function exportarIFC() {
       add(`#${novoId()}=IFCRAMP('${guidIFC()}',#${idDono},'Rampa ${e.id} (acessibilidade)',$,$,#${idsPlaceAndar[a.id]},#${pds},$);`);
     }
 
-    for (const e of elems.filter(e => e.tipo === 'telhado' && e.fechado && e.pontos.length >= 3)) {
-      // telhado: exportamos a base (beiral) como ROOFPLANE simples via slab na cota do topo do pavimento
-      const idPerfil = perfilPoligono(e.pontos);
-      const pos = novoId();
-      const o = xyz(0, 0, z0 + h);
-      add(`#${pos}=IFCAXIS2PLACEMENT3D(#${o},$,$);`);
-      const pds = corpoExtrudado(idPerfil, e.espessura || 0.15, pos);
-      add(`#${novoId()}=IFCROOF('${guidIFC()}',#${idDono},'Telhado ${e.id}',$,$,#${idsPlaceAndar[a.id]},#${pds},$,.FLAT_ROOF.);`);
+    for (const e of elems.filter(e => e.tipo === 'telhado' && e.fechado && e.pontos.length >= 4)) {
+      // telhado de duas águas: cada água é um IfcRoof com prisma triangular extrudado
+      const zTopoPav = z0 + h;
+      const [p0, p1, p2, p3] = e.pontos;
+      const aguas = [
+        { nome: 'água 1 (frente)', beiral: [p0, p1] },
+        { nome: 'água 2 (fundo)', beiral: [p2, p3] }
+      ];
+      // cumeiral: ponto médio entre os beirais, elevado pela altura do telhado
+      const cumX = (p0.x + p1.x + p2.x + p3.x) / 4;
+      const cumY = (p0.y + p1.y + p2.y + p3.y) / 4;
+      for (const agua of aguas) {
+        const [a, b] = agua.beiral;
+        const compBeiral = Math.hypot(b.x - a.x, b.y - a.y);
+        // projeção horizontal do meio do beiral até o cumeiral (inclinacao da água)
+        const meioBeiralX = (a.x + b.x) / 2, meioBeiralY = (a.y + b.y) / 2;
+        const proj = Math.hypot(cumX - meioBeiralX, cumY - meioBeiralY);
+        const idPerfil = novoId();
+        // prisma triangular no plano local: X ao longo do beiral, Y avança até o cumeiral
+        const t1 = xyz(0, 0, 0), t2 = xyz(compBeiral, 0, 0), t3 = xyz(compBeiral / 2, proj, 0);
+        const poly = novoId();
+        add(`#${poly}=IFCPOLYLINE((#${t1},#${t2},#${t3},#${t1}));`);
+        add(`#${idPerfil}=IFCARBITRARYCLOSEDPROFILEDEF(.AREA.,$,#${poly});`);
+        const pos = novoId();
+        const angBeiral = Math.atan2(b.y - a.y, b.x - a.x);
+        const dRef = dir(Math.cos(angBeiral), Math.sin(angBeiral), 0);
+        const oA = xyz(a.x, -a.y, zTopoPav);
+        add(`#${pos}=IFCAXIS2PLACEMENT3D(#${oA},#1,#${dRef});`);
+        const pds = corpoExtrudado(idPerfil, e.espessura || 0.15, pos);
+        add(`#${novoId()}=IFCROOF('${guidIFC()}',#${idDono},'Telhado ${e.id} ${agua.nome}',$,$,#${idsPlaceAndar[a.id]},#${pds},$,.GABLE_ROOF.);`);
+      }
     }
+
   }
 
   add('ENDSEC;');

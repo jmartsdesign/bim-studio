@@ -110,6 +110,9 @@
   #tourBarra { display: none; position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: var(--bg-ribbon); color: var(--texto); border: 1px solid var(--borda); border-radius: 10px; padding: 10px 16px; z-index: 70; align-items: center; gap: 12px; box-shadow: 0 6px 24px rgba(0,0,0,.5); }
   #tourBarra button { padding: 6px 12px; cursor: pointer; border-radius: 6px; border: 1px solid var(--borda); background: #222a31; color: var(--texto); }
   #tourTitulo { min-width: 220px; text-align: center; font-size: 14px; }
+  .bolinha-tour { width: 10px; height: 10px; border-radius: 50%; background: #5a6a78; cursor: pointer; display: inline-block; }
+  .bolinha-tour.ativa { background: var(--azul-revit); transform: scale(1.25); }
+  .bolinha-tour:hover { background: #8aa0b5; }
 
   /* botão de tela cheia */
   .btn-telacheia { position: absolute; top: 6px; right: 8px; padding: 2px 8px; font-size: 13px; cursor: pointer;
@@ -402,6 +405,7 @@
 <div id="tourBarra">
   <button id="btnTourAnt" title="Vista anterior (←)">◀</button>
   <b id="tourTitulo"></b>
+  <div id="tourBolinhas" style="display:flex;gap:5px;align-items:center"></div>
   <button id="btnTourProx" title="Próxima vista (→)">▶</button>
   <button id="btnTourSair" title="Encerrar tour (ESC)" style="border-color:#c62828;background:#c62828;color:#fff">✕ Sair</button>
 </div>
