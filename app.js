@@ -20,7 +20,8 @@ let selecao = null;          // id do elemento selecionado
 let camadaHistorico = [];
 let idxHistorico = -1;
 let preview = null;          // pontos temporários da ferramenta atual
-let mouse2d = { x: 0, y: 0 }; // coordenadas mundo (m)
+let mouse2d = { x: 0, y: 0 }; // coordenadas mundo com snap (m)
+let mouseFisico = { x: 0, y: 0 }; // posição real do cursor (sem snap) — p/ régua cruzada
 let snap = 0.25;
 let camera2d = { cx: 0, cy: 0, escala: 48 }; // pixels por metro — centrado na ORIGEM
 let arrastando2d = null;    // { tipo: 'pan' | 'mover' | ... }
@@ -619,7 +620,7 @@ function desenhar2d() {
 
 // régua cruzada: linhas cheias pelo cursor quando desenhando com ferramenta ativa
   if (ferramenta !== 'selecionar' && ferramenta !== 'apagar' && ferramenta !== 'pan') {
-    const t = mundoParaTela(mouse2d.x, mouse2d.y);
+    const t = mundoParaTela(mouseFisico.x, mouseFisico.y);
     cx2.save();
     cx2.strokeStyle = 'rgba(21,101,192,.45)'; cx2.lineWidth = 1; cx2.setLineDash([4, 4]);
     cx2.beginPath(); cx2.moveTo(t.x, 0); cx2.lineTo(t.x, H); cx2.stroke();
@@ -628,9 +629,18 @@ function desenhar2d() {
     // marcações de coordenada nas bordas
     cx2.fillStyle = '#1565c0'; cx2.font = '9px monospace';
     cx2.textAlign = 'left';
-    cx2.fillText(mouse2d.x.toFixed(2), t.x + 4, 10);
-    cx2.fillText(mouse2d.y.toFixed(2), 2, t.y - 4);
+    cx2.fillText(mouseFisico.x.toFixed(2), t.x + 4, 10);
+    cx2.fillText(mouseFisico.y.toFixed(2), 2, t.y - 4);
     cx2.restore();
+  }
+
+  // linha-guia do cursor físico ao ponto de snap (visualiza a pegada do snap)
+  if (osnapPonto) {
+    const tf = mundoParaTela(mouseFisico.x, mouseFisico.y);
+    const ts = mundoParaTela(osnapPonto.x, osnapPonto.y);
+    cx2.strokeStyle = '#00c85388'; cx2.lineWidth = 1; cx2.setLineDash([2, 3]);
+    cx2.beginPath(); cx2.moveTo(tf.x, tf.y); cx2.lineTo(ts.x, ts.y); cx2.stroke();
+    cx2.setLineDash([]);
   }
 
   // marcador do OSNAP (quadradinho verde no ponto capturado)
@@ -1177,6 +1187,7 @@ cv2.addEventListener('mousedown', ev => {
 
 cv2.addEventListener('mousemove', ev => {
   let m = posMouse2d(ev);
+  mouseFisico = { x: m.x, y: m.y };  // posição real do cursor (para a régua cruzada)
   // OSNAP: buscar ponto notável próximo do cursor (em pixels)
   const os = buscarOsnap(ev.offsetX, ev.offsetY);
   if (os) {
@@ -1202,7 +1213,12 @@ cv2.addEventListener('mousemove', ev => {
   mouse2d = { x: m.x, y: m.y };
   // coordenadas ao vivo na barra de status (formato CAD)
   const stC = $('#stCoord');
-  if (stC) stC.textContent = `${m.x.toFixed(2)}, ${m.y.toFixed(2)}`;
+  if (stC) {
+    const difere = Math.abs(m.x - mouseFisico.x) > 1e-9 || Math.abs(m.y - mouseFisico.y) > 1e-9;
+    stC.textContent = difere
+      ? `${m.x.toFixed(2)}, ${m.y.toFixed(2)} (snap: ${mouseFisico.x.toFixed(2)}, ${mouseFisico.y.toFixed(2)})`
+      : `${m.x.toFixed(2)}, ${m.y.toFixed(2)}`;
+  }
   if (arrastando2d?.tipo === 'pan') {
     camera2d.cx -= (ev.clientX - arrastando2d.x) / camera2d.escala;
     camera2d.cy += (ev.clientY - arrastando2d.y) / camera2d.escala;
