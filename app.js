@@ -741,7 +741,7 @@ cv2.addEventListener('mousedown', ev => {
       if (comprimento < 0.5) { alert('Rampa muito curta — clique o início (ponto baixo) e depois o fim (ponto alto).'); return; }
       const a = andarAtivo();
       const desnivel = a.alturaPisoPiso; // sobe um pavimento por padrão
-      const inclinacao = Math.min(RAMPAS_CFG.inclinacaoMax, (desnivel / comprimento) * 100);
+      const inclinacao = (desnivel / comprimento) * 100;
       projeto.elementos.push({ id: ++uid, tipo: 'rampa', andar: projeto.idAndarAtivo,
         x: (p1.x + mx) / 2, y: (p1.y + my) / 2,
         comprimento, largura: 1.2, angulo: Math.atan2(my - p1.y, mx - p1.x),
@@ -830,7 +830,7 @@ cv2.addEventListener('mousemove', ev => {
   }
   if (ferramenta === 'medir' && medicao) { medicao.x2 = m.x; medicao.y2 = m.y; desenhar2d(); }
   else if (ferramenta === 'corte' && corteAtivo != null) { const lc = cortes.find(x => x.id === corteAtivo); if (lc) { lc.x2 = m.x; lc.y2 = m.y; desenhar2d(); } }
-  else if (['parede', 'laje', 'telhado', 'escada'].includes(ferramenta) && preview) desenhar2d();
+  else if (['parede', 'laje', 'telhado', 'escada', 'rampa'].includes(ferramenta) && preview) desenhar2d();
   else atualizarCoordStatus(m);
   else if (ferramenta === 'selecionar' || ferramenta === 'apagar') { $('#stCoord').textContent = `X: ${m.x.toFixed(2)} m, Y: ${m.y.toFixed(2)} m`; }
 });
@@ -2765,8 +2765,8 @@ window.addEventListener('keydown', ev => {
   if (!tourAtivo || ev.target.tagName === 'INPUT') return;
   if (ev.key === 'ArrowRight' || ev.key === ' ') { ev.preventDefault(); avancarTour(); }
   if (ev.key === 'ArrowLeft') { ev.preventDefault(); voltarTour(); }
-  if (ev.key === 'Escape') encerrarTour();
-});
+  if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); encerrarTour(); }
+}, true); // capture: intercepta antes do handler global
 
 // ---------------- Exportação IFC (IFC4) ----------------
 function exportarIFC() {
