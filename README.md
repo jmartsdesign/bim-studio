@@ -4,7 +4,7 @@ Um programa BIM simples, inspirado no fluxo de trabalho de editores de arquitetu
 
 ## Como executar
 
-Não precisa instalar nada. Basta abrir o arquivo `index.html` em um navegador moderno (Chrome, Edge ou Firefox com internet, pois o 3D usa a biblioteca Three.js via CDN).
+Não precisa instalar nada. Basta dar **duplo clique no `index.html`** em um navegador moderno (Chrome, Edge ou Firefox) — funciona direto via `file://`, **inclusive offline** (o Three.js está embutido em `vendor/three.min.js`, sem CDN).
 
 > Dica: se preferir, sirva a pasta com `python3 -m http.server` e acesse `http://localhost:8000`.
 
