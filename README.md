@@ -57,6 +57,17 @@ Não precisa instalar nada. Basta dar **duplo clique no `index.html`** em um nav
 | `R` | Rampa | | `Q` | Circuito elétrico |
 | `T` | Telhado | | `O` | Objeto |
 
+### Comandos de navegação 2D (estilo CAD)
+
+| Comando | Tecla | Ação |
+|---|---|---|
+| Zoom Extensões | `ZE` (ou botão 🔍) | Enquadra todo o desenho **incluindo a origem (0,0)** |
+| Zoom Janela | `ZJ` | Clique 2 cantos opostos para aproximar a área |
+| Pan | `PP` (ou segurar `Espaço`) | Arraste para mover a vista |
+| Zoom Tudo | `ZT` | Igual ao Zoom Extensões |
+
+O ícone **UCS na origem (0,0)** — eixos vermelho (X) e verde (Y) com rótulo — está sempre visível na planta, e o app abre com o desenho enquadrado.
+
 Outros: `Ctrl+Z` desfazer · `Ctrl+Shift+Z` refazer · `F` tela cheia da vista sob o mouse · `Delete` excluir selecionado · `ESC` cancelar/sair do tour · setas/espaço navegam o tour.
 
 ## Fluxo básico

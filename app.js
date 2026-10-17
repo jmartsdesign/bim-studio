@@ -22,12 +22,12 @@ let idxHistorico = -1;
 let preview = null;          // pontos temporários da ferramenta atual
 let mouse2d = { x: 0, y: 0 }; // coordenadas mundo (m)
 let snap = 0.25;
-let camera2d = { cx: 5, cy: 5, escala: 48 }; // pixels por metro
+let camera2d = { cx: 0, cy: 0, escala: 48 }; // pixels por metro — centrado na ORIGEM
 let arrastando2d = null;    // { tipo: 'pan' | 'mover' | ... }
 let elementoArrastado = null;
 let mostrarCotas = true;
 
-const nomeTipo = (t) => ({ parede: 'Parede', porta: 'Porta', janela: 'Janela', laje: 'Laje', coluna: 'Coluna', escada: 'Escada', telhado: 'Telhado', objeto: 'Objeto', pontoEletrico: 'Ponto elétrico', pontoHidraulico: 'Ponto hidráulico', rampa: 'Rampa' }[t] || t);
+const nomeTipo = (t) => ({ parede: 'Parede', porta: 'Porta', janela: 'Janela', laje: 'Laje', coluna: 'Coluna', escada: 'Escada', telhado: 'Telhado', objeto: 'Objeto', pontoEletrico: 'Ponto elétrico', pontoHidraulico: 'Ponto hidráulico', rampa: 'Rampa', zoomJanela: 'Zoom Janela', pan: 'Pan' }[t] || t);
 
 // ---------------- Biblioteca de objetos ----------------
 const BIBLIOTECA = {
@@ -98,6 +98,8 @@ const opcoesFerramenta = {  // valores padrão editáveis na barra
   medir:     {},
   selecionar:{},
   apagar:    {},
+  zoomJanela: {},
+  pan: {},
 };
 const DICAS_FERR = {
   parede: 'Clique pontos na grade — as paredes se encadeiam; clique direito ou ESC finaliza.',
@@ -115,6 +117,8 @@ const DICAS_FERR = {
   terreno: 'Clique para elevar; Shift+clique para rebaixar (pincel suave).',
   medir: 'Clique o ponto inicial, mova e clique novamente para fixar a medição.',
   selecionar: 'Clique num elemento para editar no painel de Propriedades.',
+  zoomJanela: 'Clique dois cantos opostos do retângulo para aproximar a área.',
+  pan: 'Clique e arraste para mover a vista (ou segure Espaço com qualquer ferramenta).',
   apagar: 'Clique no elemento para removê-lo (portas/janelas saem com a parede).',
 };
 
@@ -142,9 +146,21 @@ function renderizarBarraOpcoes() {
 }
 
 // rampas de acessibilidade (NBR 9050: inclinação máx. 8,33% = 1:12)
-const RAMPAS_CFG = { inclinacaoMax: 8.33 }; // %
+const RAMPAS_CFG = { inclinacaoMax: 8.33, maxSegmento: 10, patamar: 1.5 }; // %, m por segmento, patamar m
 function comprimentoRampa(desnivel, inclinacaoPct) {
   return desnivel / (inclinacaoPct / 100);
+}
+// divide uma rampa em segmentos com patamares intermediários (NBR 9050)
+function segmentarRampa(comprimento, largura) {
+  const segs = [];
+  let restante = comprimento;
+  while (restante > 0) {
+    const t = Math.min(RAMPAS_CFG.maxSegmento, restante);
+    segs.push({ tipo: 'rampa', comprimento: t });
+    restante -= t;
+    if (restante > 0) segs.push({ tipo: 'patamar', comprimento: RAMPAS_CFG.patamar });
+  }
+  return segs;
 }
 
 // circuitos elétricos
@@ -206,16 +222,19 @@ function desenhar2d() {
   cx2.clearRect(0, 0, W, H);
 
   // grade
-  const passo = 1;
+  const passo = gradePasso;
   const iniX = Math.floor(camera2d.cx - W / 2 / camera2d.escala), fimX = Math.ceil(camera2d.cx + W / 2 / camera2d.escala);
   const iniY = Math.floor(camera2d.cy - H / 2 / camera2d.escala), fimY = Math.ceil(camera2d.cy + H / 2 / camera2d.escala);
   cx2.lineWidth = 1;
-  for (let x = iniX; x <= fimX; x += passo) {
+  // ajuste automático: se as linhas ficarem a menos de 18 px, dobrar o passo
+  let passoEfetivo = gradePasso;
+  while (passoEfetivo * camera2d.escala < 18) passoEfetivo *= 2;
+  for (let x = iniX; x <= fimX; x += passoEfetivo) {
     const p = mundoParaTela(x, iniY);
     cx2.strokeStyle = x === 0 ? '#c9b03b' : '#e2e4de';
     cx2.beginPath(); cx2.moveTo(p.x, 0); cx2.lineTo(p.x, H); cx2.stroke();
   }
-  for (let y = iniY; y <= fimY; y += passo) {
+  for (let y = iniY; y <= fimY; y += passoEfetivo) {
     const p = mundoParaTela(iniX, y);
     cx2.strokeStyle = y === 0 ? '#c9b03b' : '#e2e4de';
     cx2.beginPath(); cx2.moveTo(0, p.y); cx2.lineTo(W, p.y); cx2.stroke();
@@ -303,7 +322,7 @@ function desenhar2d() {
     cx2.restore();
   }
 
-  // rampas (2D)
+  // rampas (2D) — com segmentos e patamares NBR 9050
   for (const e of elems.filter(e => e.tipo === 'rampa')) {
     const p = mundoParaTela(e.x, e.y);
     const L = e.comprimento * camera2d.escala, W = e.largura * camera2d.escala;
@@ -313,6 +332,24 @@ function desenhar2d() {
     cx2.lineWidth = e.id === selecao ? 2 : 1;
     cx2.fillRect(-L / 2, -W / 2, L, W);
     cx2.strokeRect(-L / 2, -W / 2, L, W);
+    // segmentos com patamares (NBR 9050) desenhados por cima
+    if (e.comprimento > RAMPAS_CFG.maxSegmento) {
+      const segs = segmentarRampa(e.comprimento, e.largura);
+      let cursor = -L / 2;
+      for (const s of segs) {
+        const segPx = s.comprimento * camera2d.escala;
+        if (s.tipo === 'patamar') {
+          cx2.fillStyle = 'rgba(46,125,50,.30)';
+          cx2.fillRect(cursor, -W / 2, segPx, W);
+          cx2.strokeStyle = '#2e7d32'; cx2.lineWidth = 1;
+          cx2.strokeRect(cursor, -W / 2, segPx, W);
+          cx2.fillStyle = '#2e7d32'; cx2.font = '9px sans-serif'; cx2.textAlign = 'center';
+          if (segPx > 30) cx2.fillText('patamar', cursor + segPx / 2, 0);
+        }
+        cursor += segPx;
+      }
+      cx2.textAlign = 'center';
+    }
     // seta de sentido (do ponto baixo ao alto) + %
     cx2.strokeStyle = '#456'; cx2.fillStyle = '#456'; cx2.lineWidth = 1.5;
     cx2.beginPath();
@@ -528,6 +565,68 @@ function desenhar2d() {
     cx2.stroke(); cx2.setLineDash([]);
   }
 
+// régua cruzada: linhas cheias pelo cursor quando desenhando com ferramenta ativa
+  if (ferramenta !== 'selecionar' && ferramenta !== 'apagar' && ferramenta !== 'pan') {
+    const t = mundoParaTela(mouse2d.x, mouse2d.y);
+    cx2.save();
+    cx2.strokeStyle = 'rgba(21,101,192,.45)'; cx2.lineWidth = 1; cx2.setLineDash([4, 4]);
+    cx2.beginPath(); cx2.moveTo(t.x, 0); cx2.lineTo(t.x, H); cx2.stroke();
+    cx2.beginPath(); cx2.moveTo(0, t.y); cx2.lineTo(W, t.y); cx2.stroke();
+    cx2.setLineDash([]);
+    // marcações de coordenada nas bordas
+    cx2.fillStyle = '#1565c0'; cx2.font = '9px monospace';
+    cx2.textAlign = 'left';
+    cx2.fillText(mouse2d.x.toFixed(2), t.x + 4, 10);
+    cx2.fillText(mouse2d.y.toFixed(2), 2, t.y - 4);
+    cx2.restore();
+  }
+
+  // marcador do OSNAP (quadradinho verde no ponto capturado)
+  if (osnapPonto) {
+    const t = mundoParaTela(osnapPonto.x, osnapPonto.y);
+    cx2.strokeStyle = '#00c853'; cx2.lineWidth = 2;
+    if (osnapPonto.tipo === 'parede') {
+      // símbolo de "near"/perpendicular: triângulo
+      cx2.beginPath();
+      cx2.moveTo(t.x, t.y - 7); cx2.lineTo(t.x - 6, t.y + 4); cx2.lineTo(t.x + 6, t.y + 4);
+      cx2.closePath(); cx2.stroke();
+    } else {
+      cx2.strokeRect(t.x - 5, t.y - 5, 10, 10);
+    }
+    cx2.font = '9px sans-serif'; cx2.fillStyle = '#00695c'; cx2.textAlign = 'left';
+    cx2.fillText(osnapPonto.tipo, t.x + 8, t.y - 6);
+  }
+
+  // retângulo do zoom janela
+  if (zoomJanelaAtivo) {
+    const a = mundoParaTela(zoomJanelaAtivo.x1, zoomJanelaAtivo.y1);
+    const b = mundoParaTela(zoomJanelaAtivo.x2, zoomJanelaAtivo.y2);
+    cx2.strokeStyle = '#1565c0'; cx2.lineWidth = 1.5; cx2.setLineDash([6, 4]);
+    cx2.strokeRect(Math.min(a.x, b.x), Math.min(a.y, b.y), Math.abs(b.x - a.x), Math.abs(b.y - a.y));
+    cx2.setLineDash([]);
+  }
+
+  // ícone UCS na origem (0,0)
+  {
+    const o = mundoParaTela(0, 0);
+    // eixos X (vermelho, horizontal) e Y (verde, vertical) com setas
+    const tam = 22;
+    cx2.lineWidth = 2;
+    // eixo X
+    cx2.strokeStyle = '#d32f2f';
+    cx2.beginPath(); cx2.moveTo(o.x, o.y); cx2.lineTo(o.x + tam, o.y); cx2.stroke();
+    cx2.fillStyle = '#d32f2f';
+    cx2.beginPath(); cx2.moveTo(o.x + tam, o.y); cx2.lineTo(o.x + tam - 6, o.y - 3.5); cx2.lineTo(o.x + tam - 6, o.y + 3.5); cx2.closePath(); cx2.fill();
+    // eixo Y
+    cx2.strokeStyle = '#2e7d32';
+    cx2.beginPath(); cx2.moveTo(o.x, o.y); cx2.lineTo(o.x, o.y - tam); cx2.stroke();
+    cx2.fillStyle = '#2e7d32';
+    cx2.beginPath(); cx2.moveTo(o.x, o.y - tam); cx2.lineTo(o.x - 3.5, o.y - tam + 6); cx2.lineTo(o.x + 3.5, o.y - tam + 6); cx2.closePath(); cx2.fill();
+    // rótulo 0,0
+    cx2.fillStyle = '#333'; cx2.font = '9px sans-serif'; cx2.textAlign = 'left';
+    cx2.fillText('0,0', o.x + 4, o.y + 12);
+  }
+
   // régua das coordenadas
   $('#stCoord').textContent = `X: ${mouse2d.x.toFixed(2)} m, Y: ${mouse2d.y.toFixed(2)} m`;
 }
@@ -719,10 +818,52 @@ function reconstruir3d() {
       scene.add(m);
     }
 
-    // rampas: cunha (prisma triangular)
+    // rampas: cunha (prisma triangular) — segmentada com patamares NBR 9050
     for (const e of elems.filter(e => e.tipo === 'rampa')) {
       const g = new THREE.BufferGeometry();
       const L = e.comprimento, W = e.largura, D = e.desnivel;
+      if (L > RAMPAS_CFG.maxSegmento) {
+        // construir rampa segmentada: cunhas + patamares ao longo do eixo local
+        const segs = segmentarRampa(L, W);
+        const comprUtil = L; // comprimento inclinado total
+        let cursorLocal = -L / 2;
+        let alturaAcumulada = 0;
+        for (const s of segs) {
+          if (s.tipo === 'rampa') {
+            const frac = s.comprimento / L;
+            const dSeg = D * frac;
+            const gS = new THREE.BufferGeometry();
+            const v = [
+              -s.comprimento/2, 0, -W/2,  s.comprimento/2, dSeg, -W/2,  s.comprimento/2, dSeg, W/2,
+              -s.comprimento/2, 0, -W/2,  s.comprimento/2, dSeg, W/2,  -s.comprimento/2, 0, W/2,
+              -s.comprimento/2, 0, -W/2,  s.comprimento/2, 0, -W/2,  s.comprimento/2, dSeg, -W/2,
+              -s.comprimento/2, 0, W/2,   s.comprimento/2, dSeg, W/2,  s.comprimento/2, 0, W/2
+            ];
+            gS.setAttribute('position', new THREE.BufferAttribute(new Float32Array(v), 3));
+            gS.computeVertexNormals();
+            const mS = new THREE.Mesh(gS, new THREE.MeshLambertMaterial({ color: '#9db8c9', side: THREE.DoubleSide }));
+            const desloc = cursorLocal + s.comprimento / 2;
+            const dx = Math.cos(e.angulo) * desloc, dy = Math.sin(e.angulo) * desloc;
+            mS.position.set(e.x + dx, z0 + alturaAcumulada, -(e.y + dy));
+            mS.rotation.y = e.angulo;
+            mS.castShadow = true;
+            scene.add(mS);
+            alturaAcumulada += dSeg;
+          } else {
+            // patamar: laje plana
+            const gP = new THREE.BoxGeometry(s.comprimento, 0.15, W);
+            const mP = new THREE.Mesh(gP, new THREE.MeshLambertMaterial({ color: '#7ea77e' }));
+            const desloc = cursorLocal + s.comprimento / 2;
+            const dx = Math.cos(e.angulo) * desloc, dy = Math.sin(e.angulo) * desloc;
+            mP.position.set(e.x + dx, z0 + alturaAcumulada - 0.075, -(e.y + dy));
+            mP.rotation.y = e.angulo;
+            mP.castShadow = true;
+            scene.add(mP);
+          }
+          cursorLocal += s.comprimento;
+        }
+        continue; // rampa segmentada desenhada; pular a cunha única
+      }
       // vértices da cunha no espaço local (x ao longo, y altura, z largura)
       const v = [
         -L/2, 0, -W/2,  L/2, D, -W/2,  L/2, D, W/2,   // face superior (rampa)
@@ -807,8 +948,24 @@ cv2.addEventListener('wheel', ev => {
 cv2.addEventListener('mousedown', ev => {
   if (ev.button === 1 || espacoPressionado) { arrastando2d = { tipo: 'pan', x: ev.clientX, y: ev.clientY }; return; }
   if (tipologiaParaEstampar != null) { const m0 = posMouse2d(ev); clicarEstamparTipologia(m0.x, m0.y); return; }
-  const m = posMouse2d(ev);
-  const mx = aplicarSnap(m.x), my = aplicarSnap(m.y);
+  if (ferramenta === 'pan') { arrastando2d = { tipo: 'pan', x: ev.clientX, y: ev.clientY }; return; }
+  if (ferramenta === 'zoomJanela') {
+    const mz = posMouse2d(ev);
+    if (!zoomJanelaAtivo) zoomJanelaAtivo = { x1: mz.x, y1: mz.y, x2: mz.x, y2: mz.y };
+    else {
+      zoomJanela({x: zoomJanelaAtivo.x1, y: zoomJanelaAtivo.y1}, {x: mz.x, y: mz.y});
+      zoomJanelaAtivo = null;
+      ferramenta = 'selecionar';
+      renderizarBarraOpcoes();
+      document.querySelectorAll('.btn-ribbon[data-ferr]').forEach(x => x.classList.remove('ativo'));
+      document.querySelector('.btn-ribbon[data-ferr="selecionar"]')?.classList.add('ativo');
+    }
+    desenhar2d();
+    return;
+  }
+  // reutilizar a posição já tratada pelo OSNAP/ORTHO do mousemove (mais precisa)
+  const m = (ev.type === 'mousedown') ? mouse2d : posMouse2d(ev);
+  const mx = m.x, my = m.y;
 
   if (ferramenta === 'parede') {
     if (!preview) preview = { pontos: [] };
@@ -934,14 +1091,40 @@ cv2.addEventListener('mousedown', ev => {
 });
 
 cv2.addEventListener('mousemove', ev => {
-  const m = posMouse2d(ev);
+  let m = posMouse2d(ev);
+  // OSNAP: buscar ponto notável próximo do cursor (em pixels)
+  const os = buscarOsnap(ev.offsetX, ev.offsetY);
+  if (os) {
+    m = { x: os.x, y: os.y };
+    osnapPonto = os;
+  } else {
+    // snap magnético à parede mais próxima (projeção perpendicular)
+    const sp = snapParede(m);
+    if (sp) {
+      m = { x: sp.x, y: sp.y };
+      osnapPonto = sp;
+    } else {
+      osnapPonto = null;
+      // snap de grade quando não há osnap
+      m = { x: aplicarSnap(m.x), y: aplicarSnap(m.y) };
+    }
+  }
+  // ORTHO: quando há ponto-base (parede/rampa/escada em traçado), restringir a 90°
+  const base = preview?.pontos?.[preview.pontos.length - 1];
+  if (base && (ferramenta === 'parede' || ferramenta === 'rampa' || ferramenta === 'escada')) {
+    m = aplicarOrtho(base, m);
+  }
   mouse2d = { x: m.x, y: m.y };
+  // coordenadas ao vivo na barra de status (formato CAD)
+  const stC = $('#stCoord');
+  if (stC) stC.textContent = `${m.x.toFixed(2)}, ${m.y.toFixed(2)}`;
   if (arrastando2d?.tipo === 'pan') {
     camera2d.cx -= (ev.clientX - arrastando2d.x) / camera2d.escala;
     camera2d.cy += (ev.clientY - arrastando2d.y) / camera2d.escala;
     arrastando2d.x = ev.clientX; arrastando2d.y = ev.clientY;
   }
   if (ferramenta === 'medir' && medicao) { medicao.x2 = m.x; medicao.y2 = m.y; desenhar2d(); }
+  else if (ferramenta === 'zoomJanela' && zoomJanelaAtivo) { zoomJanelaAtivo.x2 = m.x; zoomJanelaAtivo.y2 = m.y; desenhar2d(); }
   else if (ferramenta === 'corte' && corteAtivo != null) { const lc = cortes.find(x => x.id === corteAtivo); if (lc) { lc.x2 = m.x; lc.y2 = m.y; desenhar2d(); } }
   else if (['parede', 'laje', 'telhado', 'escada', 'rampa'].includes(ferramenta) && preview) desenhar2d();
   else atualizarCoordStatus(m);
@@ -1076,6 +1259,11 @@ function atualizarPainelProps() {
              inp('desnivel', 'Desnível (m)', 0.05) +
              `<tr><td>Inclinação</td><td>${e.inclinacao.toFixed(2).replace('.', ',')}% ${ok ? '✓' : '⚠ > 8,33% (NBR 9050)'}</td></tr>` +
              `<tr><td>Compr. mín.</td><td>${comprimentoRampa(e.desnivel, RAMPAS_CFG.inclinacaoMax).toFixed(2).replace('.', ',')} m (p/ 8,33%)</td></tr>`;
+    if (e.comprimento > RAMPAS_CFG.maxSegmento) {
+      const segs = segmentarRampa(e.comprimento, e.largura);
+      const nPat = segs.filter(s => s.tipo === 'patamar').length;
+      linhas += `<tr><td>Patamares</td><td>${nPat} × ${RAMPAS_CFG.patamar.toFixed(2).replace('.', ',')} m (NBR 9050)</td></tr>`;
+    }
   } else if (e.tipo === 'telhado') {
     // vão aproximado: distância média entre vértices opostos
     let vano = 4;
@@ -1267,6 +1455,174 @@ function sincronizar() {
 }
 
 // ---------------- Barra de ferramentas ----------------
+// ---- ORTHO e OSNAP (estilo CAD) ----
+let orthoAtivo = false;
+let osnapAtivo = true;
+let gradePasso = 1; // metros entre linhas da grade (configurável)
+let osnapPonto = null;  // {x, y, tipo} do snap atual
+const OSNAP_RAIO = 12;   // px de tolerância
+
+// pontos notáveis de todas as paredes do pavimento
+function pontosOsnap() {
+  const pts = [];
+  for (const e of projeto.elementos.filter(x => x.andar === projeto.idAndarAtivo && x.tipo === 'parede')) {
+    pts.push({ x: e.x1, y: e.y1, tipo: 'extremo' }, { x: e.x2, y: e.y2, tipo: 'extremo' });
+    pts.push({ x: (e.x1 + e.x2) / 2, y: (e.y1 + e.y2) / 2, tipo: 'médio' });
+    // interseções com outras paredes
+  }
+  // interseções parede×parede
+  const paredes = projeto.elementos.filter(x => x.andar === projeto.idAndarAtivo && x.tipo === 'parede');
+  for (let i = 0; i < paredes.length; i++) for (let j = i + 1; j < paredes.length; j++) {
+    const inter = interseccaoLinhas(
+      { x: paredes[i].x1, y: paredes[i].y1 }, { x: paredes[i].x2, y: paredes[i].y2 },
+      { x: paredes[j].x1, y: paredes[j].y1 }, { x: paredes[j].x2, y: paredes[j].y2 });
+    if (inter && inter.u >= 0 && inter.u <= 1) {
+      const px = paredes[i].x1 + (paredes[i].x2 - paredes[i].x1) * inter.u;
+      const py = paredes[i].y1 + (paredes[i].y2 - paredes[i].y1) * inter.u;
+      pts.push({ x: px, y: py, tipo: 'interseção' });
+    }
+  }
+  return pts;
+}
+// encontrar snap mais próximo do mouse (em pixels)
+function buscarOsnap(mxTela, myTela) {
+  if (!osnapAtivo) return null;
+  let melhor = null, melhorD = OSNAP_RAIO;
+  for (const p of pontosOsnap()) {
+    const t = mundoParaTela(p.x, p.y);
+    const d = Math.hypot(t.x - mxTela, t.y - myTela);
+    if (d < melhorD) { melhorD = d; melhor = p; }
+  }
+  return melhor;
+}
+// snap magnético: ponto mais próximo em qualquer parede (projeção perpendicular)
+function snapParede(mLivre) {
+  if (!osnapAtivo) return null;
+  let melhor = null, melhorD = 0.22; // tolerância em metros (~22 cm no mundo)
+  for (const e of projeto.elementos.filter(x => x.andar === projeto.idAndarAtivo && x.tipo === 'parede')) {
+    const d = distanciaPontoSegmento(mLivre.x, mLivre.y, e.x1, e.y1, e.x2, e.y2);
+    if (d < melhorD) {
+      // ponto projetado na parede
+      const dx = e.x2 - e.x1, dy = e.y2 - e.y1;
+      const t = Math.max(0, Math.min(1, ((mLivre.x - e.x1) * dx + (mLivre.y - e.y1) * dy) / (dx * dx + dy * dy || 1)));
+      melhor = { x: e.x1 + dx * t, y: e.y1 + dy * t, tipo: 'parede' };
+      melhorD = d;
+    }
+  }
+  return melhor;
+}
+
+// aplicar ORTHO: restringe ao ângulo de 90° mais próximo do ponto base
+function aplicarOrtho(pBase, pLivre) {
+  if (!orthoAtivo || !pBase) return pLivre;
+  const dx = pLivre.x - pBase.x, dy = pLivre.y - pBase.y;
+  if (Math.abs(dx) >= Math.abs(dy)) return { x: pLivre.x, y: pBase.y };   // horizontal
+  return { x: pBase.x, y: pLivre.y };                                      // vertical
+}
+
+// ---- paleta de propriedades flutuante: arrastar e recolher ----
+(() => {
+  const paleta = document.querySelector('#paletaProps');
+  const cab = document.querySelector('#paletaCabecalho');
+  if (!paleta || !cab) return;
+  let arrastando = false, offX = 0, offY = 0;
+  cab.addEventListener('mousedown', e => {
+    if (e.target.id === 'btnRecolherPaleta') return;
+    arrastando = true;
+    const r = paleta.getBoundingClientRect();
+    const pai = paleta.parentElement.getBoundingClientRect();
+    offX = e.clientX - r.left;
+    offY = e.clientY - r.top;
+    // mudar de right para left/top ao começar a arrastar
+    paleta.style.right = 'auto';
+    paleta.style.left = (r.left - pai.left) + 'px';
+    paleta.style.top = (r.top - pai.top) + 'px';
+    e.preventDefault();
+  });
+  window.addEventListener('mousemove', e => {
+    if (!arrastando) return;
+    const pai = paleta.parentElement.getBoundingClientRect();
+    paleta.style.left = Math.max(0, Math.min(pai.width - 60, e.clientX - pai.left - offX)) + 'px';
+    paleta.style.top = Math.max(0, Math.min(pai.height - 30, e.clientY - pai.top - offY)) + 'px';
+  });
+  window.addEventListener('mouseup', () => { arrastando = false; });
+  // recolher/expandir
+  document.querySelector('#btnRecolherPaleta')?.addEventListener('click', () => {
+    const corpo = document.querySelector('#paletaCorpo');
+    const escondido = corpo.style.display === 'none';
+    corpo.style.display = escondido ? '' : 'none';
+    document.querySelector('#btnRecolherPaleta').textContent = escondido ? '▾' : '▸';
+  });
+})();
+
+// ---- toggles da barra de status (F3/F7/F8) ----
+function alternarOrtho() {
+  orthoAtivo = !orthoAtivo;
+  $('#tgOrtho')?.classList.toggle('ativo', orthoAtivo);
+  $('#stModo').textContent = orthoAtivo ? 'ORTHO ativo — desenho restrito a 90°' : '';
+  desenhar2d();
+}
+function alternarOsnap() {
+  osnapAtivo = !osnapAtivo;
+  $('#tgOsnap')?.classList.toggle('ativo', osnapAtivo);
+  $('#stModo').textContent = osnapAtivo ? '' : 'OSNAP desligado';
+  desenhar2d();
+}
+$('#tgOrtho')?.addEventListener('click', alternarOrtho);
+$('#tgOsnap')?.addEventListener('click', alternarOsnap);
+$('#tgGrid')?.addEventListener('click', () => {
+  const v = prompt('Espaçamento da grade em metros (ex.: 0.5, 1, 2):', String(gradePasso));
+  if (v) { gradePasso = Math.max(0.1, parseFloat(v.replace(',', '.')) || 1); desenhar2d(); }
+});
+
+// ---- comandos de navegação 2D (estilo CAD) ----
+// bounding de todos os elementos (inclui a origem)
+function limitesDesenho() {
+  let xMin = 0, xMax = 0, yMin = 0, yMax = 0; // origem sempre incluída
+  let tem = false;
+  for (const e of projeto.elementos) {
+    const pts = [];
+    if (e.tipo === 'parede') pts.push({x: e.x1, y: e.y1}, {x: e.x2, y: e.y2});
+    else if (e.tipo === 'laje' || e.tipo === 'telhado') pts.push(...(e.pontos || []));
+    else if (e.tipo === 'coluna' || e.tipo === 'objeto' || e.tipo === 'pontoEletrico' || e.tipo === 'pontoHidraulico') pts.push({x: e.x, y: e.y});
+    else if (e.tipo === 'escada' || e.tipo === 'rampa') {
+      const r = Math.max(e.comprimento, e.largura) / 2;
+      pts.push({x: e.x - r, y: e.y - r}, {x: e.x + r, y: e.y + r});
+    }
+    for (const p of pts) {
+      if (!tem) { xMin = xMax = p.x; yMin = yMax = p.y; tem = true; }
+      xMin = Math.min(xMin, p.x); xMax = Math.max(xMax, p.x);
+      yMin = Math.min(yMin, p.y); yMax = Math.max(yMax, p.y);
+    }
+  }
+  return { xMin, xMax, yMin, yMax, tem };
+}
+// zoom extensões: enquadra tudo com margem
+function zoomExtensões() {
+  const b = limitesDesenho();
+  const W = cv2.clientWidth, H = cv2.clientHeight;
+  const margem = 0.15;
+  const largura = Math.max(b.xMax - b.xMin, 1) * (1 + margem);
+  const altura = Math.max(b.yMax - b.yMin, 1) * (1 + margem);
+  camera2d.escala = Math.min(W / largura, H / altura);
+  camera2d.cx = (b.xMin + b.xMax) / 2;
+  camera2d.cy = (b.yMin + b.yMax) / 2;
+  camera2d.escala = Math.min(400, Math.max(6, camera2d.escala));
+  desenhar2d();
+}
+// zoom janela: aguarda dois cliques formando o retângulo
+let zoomJanelaAtivo = null; // {x1,y1,x2,y2}
+function zoomJanela(p1, p2) {
+  const xMin = Math.min(p1.x, p2.x), xMax = Math.max(p1.x, p2.x);
+  const yMin = Math.min(p1.y, p2.y), yMax = Math.max(p1.y, p2.y);
+  if (xMax - xMin < 0.05 || yMax - yMin < 0.05) return;
+  const W = cv2.clientWidth, H = cv2.clientHeight;
+  camera2d.escala = Math.min(400, Math.max(1, Math.min(W / (xMax - xMin), H / (yMax - yMin))));
+  camera2d.cx = (xMin + xMax) / 2;
+  camera2d.cy = (yMin + yMax) / 2;
+  desenhar2d();
+}
+
 // ---- atalhos de teclado por ferramenta (estilo Revit) ----
 const ATALHOS_FERRAMENTA = {
   's': 'selecionar', 'm': 'medir', 'x': 'apagar',
@@ -1280,11 +1636,35 @@ function ativarFerramenta(nome) {
   const botao = document.querySelector(`.btn-ribbon[data-ferr="${nome}"]`);
   if (botao) botao.click();
 }
+let bufferComando = '';
+let timerComando = null;
 window.addEventListener('keydown', ev => {
   // não interceptar quando digitando em inputs
   if (ev.target.tagName === 'INPUT' || ev.target.tagName === 'SELECT' || ev.target.tagName === 'TEXTAREA') return;
   if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
+  // teclas de função CAD
+  if (ev.key === 'F3') { ev.preventDefault(); alternarOsnap(); return; }
+  if (ev.key === 'F8') { ev.preventDefault(); alternarOrtho(); return; }
+  if (ev.key === 'F7') { ev.preventDefault(); $('#tgGrid')?.click(); return; }
   const tecla = ev.key.toLowerCase();
+  // comandos de navegação de 2 letras (ZE, ZT, ZJ, PP)
+  if (/^[a-z]$/.test(tecla)) {
+    bufferComando = (bufferComando + tecla).slice(-2);
+    clearTimeout(timerComando);
+    timerComando = setTimeout(() => { bufferComando = ''; }, 900);
+    const COMANDOS_NAV = {
+      'ze': () => zoomExtensões(),
+      'zt': () => zoomExtensões(),  // zoom tudo = extensões (inclui origem)
+      'zj': () => { ferramenta = 'zoomJanela'; renderizarBarraOpcoes(); desenhar2d(); },
+      'pp': () => { ferramenta = 'pan'; renderizarBarraOpcoes(); desenhar2d(); },
+    };
+    if (COMANDOS_NAV[bufferComando]) {
+      ev.preventDefault();
+      COMANDOS_NAV[bufferComando]();
+      bufferComando = '';
+      return;
+    }
+  }
   if (ATALHOS_FERRAMENTA[tecla]) {
     ev.preventDefault();
     ativarFerramenta(ATALHOS_FERRAMENTA[tecla]);
@@ -2362,6 +2742,7 @@ function pararTimelapse() {
 }
 $('#btnTimelapse')?.addEventListener('click', iniciarTimelapse);
 $('#btnSalvarTip')?.addEventListener('click', salvarTipologia);
+$('#btnZoomExt')?.addEventListener('click', zoomExtensões);
 $('#btnTerreno')?.addEventListener('click', () => {
   if (!terreno) { terreno = novoTerreno(5, 5); desenhar2d(); reconstruir3d(); aplicarSol(); }
 });
@@ -2925,13 +3306,32 @@ function encerrarTour() {
   $('#tourBarra').style.display = 'none';
   $('#modalVista').style.display = 'none';
 }
-function renderizarPassoTour() {
+function renderizarPassoTour(transicao = true) {
   const passos = passosTour();
   if (!passos.length) return;
   tourPasso = Math.max(0, Math.min(tourPasso, passos.length - 1));
   const p = passos[tourPasso];
   $('#tourTitulo').textContent = `${tourPasso + 1}/${passos.length} — ${p.titulo}`;
+  // transição: escurece, troca a vista, clareia
+  const modal = $('#modalVista');
+  if (transicao && modal.animate) {
+    modal.animate([{ opacity: 0.15 }, { opacity: 1 }], { duration: 320, easing: 'ease-out' });
+  }
   p.acao();
+  renderizarBolinhasTour(passos.length);
+}
+// bolinhas de progresso clicáveis na barra do tour
+function renderizarBolinhasTour(total) {
+  const box = $('#tourBolinhas');
+  if (!box) return;
+  box.innerHTML = '';
+  for (let i = 0; i < total; i++) {
+    const b = document.createElement('span');
+    b.className = 'bolinha-tour' + (i === tourPasso ? ' ativa' : '');
+    b.title = passosTour()[i].titulo;
+    b.addEventListener('click', () => { tourPasso = i; renderizarPassoTour(); });
+    box.appendChild(b);
+  }
 }
 function avancarTour() { tourPasso++; const n = passosTour().length; if (tourPasso >= n) { encerrarTour(); return; } renderizarPassoTour(); }
 function voltarTour() { if (tourPasso > 0) { tourPasso--; renderizarPassoTour(); } }
@@ -3204,15 +3604,39 @@ function exportarIFC() {
       add(`#${novoId()}=IFCRAMP('${guidIFC()}',#${idDono},'Rampa ${e.id} (acessibilidade)',$,$,#${idsPlaceAndar[a.id]},#${pds},$);`);
     }
 
-    for (const e of elems.filter(e => e.tipo === 'telhado' && e.fechado && e.pontos.length >= 3)) {
-      // telhado: exportamos a base (beiral) como ROOFPLANE simples via slab na cota do topo do pavimento
-      const idPerfil = perfilPoligono(e.pontos);
-      const pos = novoId();
-      const o = xyz(0, 0, z0 + h);
-      add(`#${pos}=IFCAXIS2PLACEMENT3D(#${o},$,$);`);
-      const pds = corpoExtrudado(idPerfil, e.espessura || 0.15, pos);
-      add(`#${novoId()}=IFCROOF('${guidIFC()}',#${idDono},'Telhado ${e.id}',$,$,#${idsPlaceAndar[a.id]},#${pds},$,.FLAT_ROOF.);`);
+    for (const e of elems.filter(e => e.tipo === 'telhado' && e.fechado && e.pontos.length >= 4)) {
+      // telhado de duas águas: cada água é um IfcRoof com prisma triangular extrudado
+      const zTopoPav = z0 + h;
+      const [p0, p1, p2, p3] = e.pontos;
+      const aguas = [
+        { nome: 'água 1 (frente)', beiral: [p0, p1] },
+        { nome: 'água 2 (fundo)', beiral: [p2, p3] }
+      ];
+      // cumeiral: ponto médio entre os beirais, elevado pela altura do telhado
+      const cumX = (p0.x + p1.x + p2.x + p3.x) / 4;
+      const cumY = (p0.y + p1.y + p2.y + p3.y) / 4;
+      for (const agua of aguas) {
+        const [a, b] = agua.beiral;
+        const compBeiral = Math.hypot(b.x - a.x, b.y - a.y);
+        // projeção horizontal do meio do beiral até o cumeiral (inclinacao da água)
+        const meioBeiralX = (a.x + b.x) / 2, meioBeiralY = (a.y + b.y) / 2;
+        const proj = Math.hypot(cumX - meioBeiralX, cumY - meioBeiralY);
+        const idPerfil = novoId();
+        // prisma triangular no plano local: X ao longo do beiral, Y avança até o cumeiral
+        const t1 = xyz(0, 0, 0), t2 = xyz(compBeiral, 0, 0), t3 = xyz(compBeiral / 2, proj, 0);
+        const poly = novoId();
+        add(`#${poly}=IFCPOLYLINE((#${t1},#${t2},#${t3},#${t1}));`);
+        add(`#${idPerfil}=IFCARBITRARYCLOSEDPROFILEDEF(.AREA.,$,#${poly});`);
+        const pos = novoId();
+        const angBeiral = Math.atan2(b.y - a.y, b.x - a.x);
+        const dRef = dir(Math.cos(angBeiral), Math.sin(angBeiral), 0);
+        const oA = xyz(a.x, -a.y, zTopoPav);
+        add(`#${pos}=IFCAXIS2PLACEMENT3D(#${oA},#1,#${dRef});`);
+        const pds = corpoExtrudado(idPerfil, e.espessura || 0.15, pos);
+        add(`#${novoId()}=IFCROOF('${guidIFC()}',#${idDono},'Telhado ${e.id} ${agua.nome}',$,$,#${idsPlaceAndar[a.id]},#${pds},$,.GABLE_ROOF.);`);
+      }
     }
+
   }
 
   add('ENDSEC;');
@@ -3245,6 +3669,7 @@ if (salvo) {
 salvarEstado();
 renderizarBarraOpcoes();
 redimensionar();
+zoomExtensões();
 atualizarCamera3d();
 sincronizar();
 animar();
