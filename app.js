@@ -27,7 +27,7 @@ let arrastando2d = null;    // { tipo: 'pan' | 'mover' | ... }
 let elementoArrastado = null;
 let mostrarCotas = true;
 
-const nomeTipo = (t) => ({ parede: 'Parede', porta: 'Porta', janela: 'Janela', laje: 'Laje', coluna: 'Coluna', escada: 'Escada', telhado: 'Telhado', objeto: 'Objeto', pontoEletrico: 'Ponto elétrico', pontoHidraulico: 'Ponto hidráulico', rampa: 'Rampa' }[t] || t);
+const nomeTipo = (t) => ({ parede: 'Parede', porta: 'Porta', janela: 'Janela', laje: 'Laje', coluna: 'Coluna', escada: 'Escada', telhado: 'Telhado', objeto: 'Objeto', pontoEletrico: 'Ponto elétrico', pontoHidraulico: 'Ponto hidráulico', rampa: 'Rampa', zoomJanela: 'Zoom Janela', pan: 'Pan' }[t] || t);
 
 // ---------------- Biblioteca de objetos ----------------
 const BIBLIOTECA = {
@@ -98,6 +98,8 @@ const opcoesFerramenta = {  // valores padrão editáveis na barra
   medir:     {},
   selecionar:{},
   apagar:    {},
+  zoomJanela: {},
+  pan: {},
 };
 const DICAS_FERR = {
   parede: 'Clique pontos na grade — as paredes se encadeiam; clique direito ou ESC finaliza.',
@@ -115,6 +117,8 @@ const DICAS_FERR = {
   terreno: 'Clique para elevar; Shift+clique para rebaixar (pincel suave).',
   medir: 'Clique o ponto inicial, mova e clique novamente para fixar a medição.',
   selecionar: 'Clique num elemento para editar no painel de Propriedades.',
+  zoomJanela: 'Clique dois cantos opostos do retângulo para aproximar a área.',
+  pan: 'Clique e arraste para mover a vista (ou segure Espaço com qualquer ferramenta).',
   apagar: 'Clique no elemento para removê-lo (portas/janelas saem com a parede).',
 };
 
@@ -558,6 +562,36 @@ function desenhar2d() {
     cx2.stroke(); cx2.setLineDash([]);
   }
 
+// retângulo do zoom janela
+  if (zoomJanelaAtivo) {
+    const a = mundoParaTela(zoomJanelaAtivo.x1, zoomJanelaAtivo.y1);
+    const b = mundoParaTela(zoomJanelaAtivo.x2, zoomJanelaAtivo.y2);
+    cx2.strokeStyle = '#1565c0'; cx2.lineWidth = 1.5; cx2.setLineDash([6, 4]);
+    cx2.strokeRect(Math.min(a.x, b.x), Math.min(a.y, b.y), Math.abs(b.x - a.x), Math.abs(b.y - a.y));
+    cx2.setLineDash([]);
+  }
+
+  // ícone UCS na origem (0,0)
+  {
+    const o = mundoParaTela(0, 0);
+    // eixos X (vermelho, horizontal) e Y (verde, vertical) com setas
+    const tam = 22;
+    cx2.lineWidth = 2;
+    // eixo X
+    cx2.strokeStyle = '#d32f2f';
+    cx2.beginPath(); cx2.moveTo(o.x, o.y); cx2.lineTo(o.x + tam, o.y); cx2.stroke();
+    cx2.fillStyle = '#d32f2f';
+    cx2.beginPath(); cx2.moveTo(o.x + tam, o.y); cx2.lineTo(o.x + tam - 6, o.y - 3.5); cx2.lineTo(o.x + tam - 6, o.y + 3.5); cx2.closePath(); cx2.fill();
+    // eixo Y
+    cx2.strokeStyle = '#2e7d32';
+    cx2.beginPath(); cx2.moveTo(o.x, o.y); cx2.lineTo(o.x, o.y - tam); cx2.stroke();
+    cx2.fillStyle = '#2e7d32';
+    cx2.beginPath(); cx2.moveTo(o.x, o.y - tam); cx2.lineTo(o.x - 3.5, o.y - tam + 6); cx2.lineTo(o.x + 3.5, o.y - tam + 6); cx2.closePath(); cx2.fill();
+    // rótulo 0,0
+    cx2.fillStyle = '#333'; cx2.font = '9px sans-serif'; cx2.textAlign = 'left';
+    cx2.fillText('0,0', o.x + 4, o.y + 12);
+  }
+
   // régua das coordenadas
   $('#stCoord').textContent = `X: ${mouse2d.x.toFixed(2)} m, Y: ${mouse2d.y.toFixed(2)} m`;
 }
@@ -879,6 +913,21 @@ cv2.addEventListener('wheel', ev => {
 cv2.addEventListener('mousedown', ev => {
   if (ev.button === 1 || espacoPressionado) { arrastando2d = { tipo: 'pan', x: ev.clientX, y: ev.clientY }; return; }
   if (tipologiaParaEstampar != null) { const m0 = posMouse2d(ev); clicarEstamparTipologia(m0.x, m0.y); return; }
+  if (ferramenta === 'pan') { arrastando2d = { tipo: 'pan', x: ev.clientX, y: ev.clientY }; return; }
+  if (ferramenta === 'zoomJanela') {
+    const mz = posMouse2d(ev);
+    if (!zoomJanelaAtivo) zoomJanelaAtivo = { x1: mz.x, y1: mz.y, x2: mz.x, y2: mz.y };
+    else {
+      zoomJanela({x: zoomJanelaAtivo.x1, y: zoomJanelaAtivo.y1}, {x: mz.x, y: mz.y});
+      zoomJanelaAtivo = null;
+      ferramenta = 'selecionar';
+      renderizarBarraOpcoes();
+      document.querySelectorAll('.btn-ribbon[data-ferr]').forEach(x => x.classList.remove('ativo'));
+      document.querySelector('.btn-ribbon[data-ferr="selecionar"]')?.classList.add('ativo');
+    }
+    desenhar2d();
+    return;
+  }
   const m = posMouse2d(ev);
   const mx = aplicarSnap(m.x), my = aplicarSnap(m.y);
 
@@ -1014,6 +1063,7 @@ cv2.addEventListener('mousemove', ev => {
     arrastando2d.x = ev.clientX; arrastando2d.y = ev.clientY;
   }
   if (ferramenta === 'medir' && medicao) { medicao.x2 = m.x; medicao.y2 = m.y; desenhar2d(); }
+  else if (ferramenta === 'zoomJanela' && zoomJanelaAtivo) { zoomJanelaAtivo.x2 = m.x; zoomJanelaAtivo.y2 = m.y; desenhar2d(); }
   else if (ferramenta === 'corte' && corteAtivo != null) { const lc = cortes.find(x => x.id === corteAtivo); if (lc) { lc.x2 = m.x; lc.y2 = m.y; desenhar2d(); } }
   else if (['parede', 'laje', 'telhado', 'escada', 'rampa'].includes(ferramenta) && preview) desenhar2d();
   else atualizarCoordStatus(m);
@@ -1344,6 +1394,54 @@ function sincronizar() {
 }
 
 // ---------------- Barra de ferramentas ----------------
+// ---- comandos de navegação 2D (estilo CAD) ----
+// bounding de todos os elementos (inclui a origem)
+function limitesDesenho() {
+  let xMin = 0, xMax = 0, yMin = 0, yMax = 0; // origem sempre incluída
+  let tem = false;
+  for (const e of projeto.elementos) {
+    const pts = [];
+    if (e.tipo === 'parede') pts.push({x: e.x1, y: e.y1}, {x: e.x2, y: e.y2});
+    else if (e.tipo === 'laje' || e.tipo === 'telhado') pts.push(...(e.pontos || []));
+    else if (e.tipo === 'coluna' || e.tipo === 'objeto' || e.tipo === 'pontoEletrico' || e.tipo === 'pontoHidraulico') pts.push({x: e.x, y: e.y});
+    else if (e.tipo === 'escada' || e.tipo === 'rampa') {
+      const r = Math.max(e.comprimento, e.largura) / 2;
+      pts.push({x: e.x - r, y: e.y - r}, {x: e.x + r, y: e.y + r});
+    }
+    for (const p of pts) {
+      if (!tem) { xMin = xMax = p.x; yMin = yMax = p.y; tem = true; }
+      xMin = Math.min(xMin, p.x); xMax = Math.max(xMax, p.x);
+      yMin = Math.min(yMin, p.y); yMax = Math.max(yMax, p.y);
+    }
+  }
+  return { xMin, xMax, yMin, yMax, tem };
+}
+// zoom extensões: enquadra tudo com margem
+function zoomExtensões() {
+  const b = limitesDesenho();
+  const W = cv2.clientWidth, H = cv2.clientHeight;
+  const margem = 0.15;
+  const largura = Math.max(b.xMax - b.xMin, 1) * (1 + margem);
+  const altura = Math.max(b.yMax - b.yMin, 1) * (1 + margem);
+  camera2d.escala = Math.min(W / largura, H / altura);
+  camera2d.cx = (b.xMin + b.xMax) / 2;
+  camera2d.cy = (b.yMin + b.yMax) / 2;
+  camera2d.escala = Math.min(400, Math.max(6, camera2d.escala));
+  desenhar2d();
+}
+// zoom janela: aguarda dois cliques formando o retângulo
+let zoomJanelaAtivo = null; // {x1,y1,x2,y2}
+function zoomJanela(p1, p2) {
+  const xMin = Math.min(p1.x, p2.x), xMax = Math.max(p1.x, p2.x);
+  const yMin = Math.min(p1.y, p2.y), yMax = Math.max(p1.y, p2.y);
+  if (xMax - xMin < 0.05 || yMax - yMin < 0.05) return;
+  const W = cv2.clientWidth, H = cv2.clientHeight;
+  camera2d.escala = Math.min(400, Math.max(1, Math.min(W / (xMax - xMin), H / (yMax - yMin))));
+  camera2d.cx = (xMin + xMax) / 2;
+  camera2d.cy = (yMin + yMax) / 2;
+  desenhar2d();
+}
+
 // ---- atalhos de teclado por ferramenta (estilo Revit) ----
 const ATALHOS_FERRAMENTA = {
   's': 'selecionar', 'm': 'medir', 'x': 'apagar',
@@ -1357,11 +1455,31 @@ function ativarFerramenta(nome) {
   const botao = document.querySelector(`.btn-ribbon[data-ferr="${nome}"]`);
   if (botao) botao.click();
 }
+let bufferComando = '';
+let timerComando = null;
 window.addEventListener('keydown', ev => {
   // não interceptar quando digitando em inputs
   if (ev.target.tagName === 'INPUT' || ev.target.tagName === 'SELECT' || ev.target.tagName === 'TEXTAREA') return;
   if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
   const tecla = ev.key.toLowerCase();
+  // comandos de navegação de 2 letras (ZE, ZT, ZJ, PP)
+  if (/^[a-z]$/.test(tecla)) {
+    bufferComando = (bufferComando + tecla).slice(-2);
+    clearTimeout(timerComando);
+    timerComando = setTimeout(() => { bufferComando = ''; }, 900);
+    const COMANDOS_NAV = {
+      'ze': () => zoomExtensões(),
+      'zt': () => zoomExtensões(),  // zoom tudo = extensões (inclui origem)
+      'zj': () => { ferramenta = 'zoomJanela'; renderizarBarraOpcoes(); desenhar2d(); },
+      'pp': () => { ferramenta = 'pan'; renderizarBarraOpcoes(); desenhar2d(); },
+    };
+    if (COMANDOS_NAV[bufferComando]) {
+      ev.preventDefault();
+      COMANDOS_NAV[bufferComando]();
+      bufferComando = '';
+      return;
+    }
+  }
   if (ATALHOS_FERRAMENTA[tecla]) {
     ev.preventDefault();
     ativarFerramenta(ATALHOS_FERRAMENTA[tecla]);
@@ -2439,6 +2557,7 @@ function pararTimelapse() {
 }
 $('#btnTimelapse')?.addEventListener('click', iniciarTimelapse);
 $('#btnSalvarTip')?.addEventListener('click', salvarTipologia);
+$('#btnZoomExt')?.addEventListener('click', zoomExtensões);
 $('#btnTerreno')?.addEventListener('click', () => {
   if (!terreno) { terreno = novoTerreno(5, 5); desenhar2d(); reconstruir3d(); aplicarSol(); }
 });
@@ -3365,6 +3484,7 @@ if (salvo) {
 salvarEstado();
 renderizarBarraOpcoes();
 redimensionar();
+zoomExtensões();
 atualizarCamera3d();
 sincronizar();
 animar();
