@@ -20,14 +20,15 @@ let selecao = null;          // id do elemento selecionado
 let camadaHistorico = [];
 let idxHistorico = -1;
 let preview = null;          // pontos temporários da ferramenta atual
-let mouse2d = { x: 0, y: 0 }; // coordenadas mundo (m)
+let mouse2d = { x: 0, y: 0 }; // coordenadas mundo com snap (m)
+let mouseFisico = { x: 0, y: 0 }; // posição real do cursor (sem snap) — p/ régua cruzada
 let snap = 0.25;
 let camera2d = { cx: 0, cy: 0, escala: 48 }; // pixels por metro — centrado na ORIGEM
 let arrastando2d = null;    // { tipo: 'pan' | 'mover' | ... }
 let elementoArrastado = null;
 let mostrarCotas = true;
 
-const nomeTipo = (t) => ({ parede: 'Parede', porta: 'Porta', janela: 'Janela', laje: 'Laje', coluna: 'Coluna', escada: 'Escada', telhado: 'Telhado', objeto: 'Objeto', pontoEletrico: 'Ponto elétrico', pontoHidraulico: 'Ponto hidráulico', rampa: 'Rampa', zoomJanela: 'Zoom Janela', pan: 'Pan' }[t] || t);
+const nomeTipo = (t) => ({ parede: 'Parede', porta: 'Porta', janela: 'Janela', laje: 'Laje', coluna: 'Coluna', escada: 'Escada', telhado: 'Telhado', objeto: 'Objeto', pontoEletrico: 'Ponto elétrico', pontoHidraulico: 'Ponto hidráulico', rampa: 'Rampa', viga: 'Viga', texto: 'Texto', zoomJanela: 'Zoom Janela', pan: 'Pan' }[t] || t);
 
 // ---------------- Biblioteca de objetos ----------------
 const BIBLIOTECA = {
@@ -74,7 +75,7 @@ const CAMADAS = {
 };
 const CAMADA_TIPOS = {
   parede: 'arquitetura', porta: 'arquitetura', janela: 'arquitetura', laje: 'arquitetura',
-  coluna: 'arquitetura', escada: 'arquitetura', telhado: 'arquitetura', objeto: 'arquitetura', rampa: 'arquitetura',
+  coluna: 'arquitetura', escada: 'arquitetura', telhado: 'arquitetura', objeto: 'arquitetura', rampa: 'arquitetura', viga: 'arquitetura', texto: 'arquitetura',
   pontoEletrico: 'eletrica', pontoHidraulico: 'hidraulica'
 };
 const camadaDe = (e) => e.camada || CAMADA_TIPOS[e.tipo] || 'arquitetura';
@@ -93,6 +94,8 @@ const opcoesFerramenta = {  // valores padrão editáveis na barra
   laje:      { espessura: 0.2 },
   telhado:   { altura: 1.8, espessura: 0.15 },
   circuito:  {},
+  viga:      { auto: 1 },
+  texto:     { texto: 'Anotação' },
   corte:     {},
   terreno:   {},
   medir:     {},
@@ -108,11 +111,13 @@ const DICAS_FERR = {
   laje: 'Clique os vértices; duplo clique ou clique perto do 1º ponto fecha o polígono.',
   coluna: 'Clique o centro da coluna.',
   escada: 'Clique o início e depois o fim do lance — degraus calculados (~28 cm).',
-  rampa: 'Clique o ponto BAIXO e depois o ALTO — inclinação máx. 8,33% (NBR 9050).',
+  rampa: 'Clique o ponto BAIXO e depois o ALTO — inclinação máx. 8% (NP EN 17210 / DL 163/2006).',
   telhado: 'Clique o polígono do beiral; duplo clique fecha.',
   objeto: 'Escolha o objeto no painel Biblioteca e clique na planta.',
   pontoInst: 'Escolha o ponto no painel Instalações e clique na planta.',
   circuito: 'Clique os pontos do trajeto (snap em tomadas); duplo clique finaliza.',
+  viga: 'Clique início e fim da viga — altura/largura automáticas (Eurocódigo 2: h ≈ vão/12).',
+  texto: 'Clique na planta para inserir a anotação; edite no painel de Propriedades.',
   corte: 'Clique início e fim da linha de corte — cada corte ganha rótulo (A, B...).',
   terreno: 'Clique para elevar; Shift+clique para rebaixar (pincel suave).',
   medir: 'Clique o ponto inicial, mova e clique novamente para fixar a medição.',
@@ -145,12 +150,20 @@ function renderizarBarraOpcoes() {
   }));
 }
 
-// rampas de acessibilidade (NBR 9050: inclinação máx. 8,33% = 1:12)
-const RAMPAS_CFG = { inclinacaoMax: 8.33, maxSegmento: 10, patamar: 1.5 }; // %, m por segmento, patamar m
+// vigas: pré-dimensionamento pela regra prática do Eurocódigo 2 (NP EN 1992-1-1)
+// (h ≈ vão/12 para vigas biapoiadas; bw ≈ h/2 com mínimos de 15 cm — EC2 §5.3.1.2)
+function dimensionarViga(vao) {
+  const altura = Math.max(0.20, Math.ceil((vao / 12) * 100) / 100);
+  const largura = Math.max(0.15, Math.ceil((altura / 2) * 100) / 100);
+  return { altura, largura };
+}
+
+// rampas de acessibilidade (NP EN 17210:2021 / DL 163/2006: inclinação máx. 8% = 1:12,5)
+const RAMPAS_CFG = { inclinacaoMax: 8.0, maxSegmento: 10, patamar: 1.5 }; // % (NP EN 17210), m por segmento, patamar m (DL 163/2006)
 function comprimentoRampa(desnivel, inclinacaoPct) {
   return desnivel / (inclinacaoPct / 100);
 }
-// divide uma rampa em segmentos com patamares intermediários (NBR 9050)
+// divide uma rampa em segmentos com patamares intermediários (NP EN 17210 / DL 163/2006)
 function segmentarRampa(comprimento, largura) {
   const segs = [];
   let restante = comprimento;
@@ -322,7 +335,47 @@ function desenhar2d() {
     cx2.restore();
   }
 
-  // rampas (2D) — com segmentos e patamares NBR 9050
+  // vigas (2D): linha dupla com rótulo da seção
+  for (const e of elems.filter(e => e.tipo === 'viga')) {
+    const p = mundoParaTela(e.x, e.y);
+    const L = e.comprimento * camera2d.escala;
+    const Wd = Math.max(2, e.largura * camera2d.escala);
+    cx2.save(); cx2.translate(p.x, p.y); cx2.rotate(-e.angulo);
+    cx2.strokeStyle = e.id === selecao ? '#1565c0' : '#6a4f9c';
+    cx2.lineWidth = e.id === selecao ? 2 : 1.2;
+    cx2.beginPath(); cx2.moveTo(-L/2, -Wd/2); cx2.lineTo(L/2, -Wd/2); cx2.stroke();
+    cx2.beginPath(); cx2.moveTo(-L/2, Wd/2); cx2.lineTo(L/2, Wd/2); cx2.stroke();
+    if (Wd > 4) {
+      cx2.strokeStyle = '#6a4f9c66'; cx2.lineWidth = 0.7;
+      for (let x = -L/2; x < L/2; x += 6) {
+        cx2.beginPath(); cx2.moveTo(x, -Wd/2); cx2.lineTo(x + Wd, Wd/2); cx2.stroke();
+      }
+    }
+    if (L > 40) {
+      cx2.fillStyle = e.id === selecao ? '#1565c0' : '#6a4f9c';
+      cx2.font = '9px sans-serif'; cx2.textAlign = 'center';
+      cx2.fillText(`${Math.round(e.largura*100)}x${Math.round(e.altura*100)}`, 0, -Wd/2 - 3);
+    }
+    cx2.restore();
+  }
+
+  // textos/anotações (2D)
+  for (const e of elems.filter(e => e.tipo === 'texto')) {
+    const p = mundoParaTela(e.x, e.y);
+    cx2.font = `${e.tamanho}px sans-serif`;
+    cx2.fillStyle = e.id === selecao ? '#1565c0' : '#333';
+    cx2.textAlign = 'center'; cx2.textBaseline = 'middle';
+    cx2.fillText(e.texto, p.x, p.y);
+    if (e.id === selecao) {
+      const w = cx2.measureText(e.texto).width;
+      cx2.strokeStyle = '#1565c0'; cx2.lineWidth = 1;
+      cx2.setLineDash([4, 3]);
+      cx2.strokeRect(p.x - w/2 - 4, p.y - e.tamanho/2 - 4, w + 8, e.tamanho + 8);
+      cx2.setLineDash([]);
+    }
+  }
+
+  // rampas (2D) — com segmentos e patamares NP EN 17210
   for (const e of elems.filter(e => e.tipo === 'rampa')) {
     const p = mundoParaTela(e.x, e.y);
     const L = e.comprimento * camera2d.escala, W = e.largura * camera2d.escala;
@@ -332,7 +385,7 @@ function desenhar2d() {
     cx2.lineWidth = e.id === selecao ? 2 : 1;
     cx2.fillRect(-L / 2, -W / 2, L, W);
     cx2.strokeRect(-L / 2, -W / 2, L, W);
-    // segmentos com patamares (NBR 9050) desenhados por cima
+    // segmentos com patamares (NP EN 17210) desenhados por cima
     if (e.comprimento > RAMPAS_CFG.maxSegmento) {
       const segs = segmentarRampa(e.comprimento, e.largura);
       let cursor = -L / 2;
@@ -361,10 +414,10 @@ function desenhar2d() {
     cx2.font = 'bold 10px sans-serif'; cx2.textAlign = 'center';
     const pct = e.inclinacao.toFixed(2).replace('.', ',') + '%';
     if (L > 46) cx2.fillText(pct, 0, -4);
-    // aviso NBR se exceder 8,33%
+    // aviso se exceder 8% (NP EN 17210)
     if (e.inclinacao > RAMPAS_CFG.inclinacaoMax + 0.01) {
       cx2.fillStyle = '#c62828';
-      cx2.fillText('⚠ NBR 9050', 0, W / 2 + 12);
+      cx2.fillText('⚠ NP EN 17210', 0, W / 2 + 12);
     }
     cx2.restore();
   }
@@ -567,7 +620,7 @@ function desenhar2d() {
 
 // régua cruzada: linhas cheias pelo cursor quando desenhando com ferramenta ativa
   if (ferramenta !== 'selecionar' && ferramenta !== 'apagar' && ferramenta !== 'pan') {
-    const t = mundoParaTela(mouse2d.x, mouse2d.y);
+    const t = mundoParaTela(mouseFisico.x, mouseFisico.y);
     cx2.save();
     cx2.strokeStyle = 'rgba(21,101,192,.45)'; cx2.lineWidth = 1; cx2.setLineDash([4, 4]);
     cx2.beginPath(); cx2.moveTo(t.x, 0); cx2.lineTo(t.x, H); cx2.stroke();
@@ -576,9 +629,18 @@ function desenhar2d() {
     // marcações de coordenada nas bordas
     cx2.fillStyle = '#1565c0'; cx2.font = '9px monospace';
     cx2.textAlign = 'left';
-    cx2.fillText(mouse2d.x.toFixed(2), t.x + 4, 10);
-    cx2.fillText(mouse2d.y.toFixed(2), 2, t.y - 4);
+    cx2.fillText(mouseFisico.x.toFixed(2), t.x + 4, 10);
+    cx2.fillText(mouseFisico.y.toFixed(2), 2, t.y - 4);
     cx2.restore();
+  }
+
+  // linha-guia do cursor físico ao ponto de snap (visualiza a pegada do snap)
+  if (osnapPonto) {
+    const tf = mundoParaTela(mouseFisico.x, mouseFisico.y);
+    const ts = mundoParaTela(osnapPonto.x, osnapPonto.y);
+    cx2.strokeStyle = '#00c85388'; cx2.lineWidth = 1; cx2.setLineDash([2, 3]);
+    cx2.beginPath(); cx2.moveTo(tf.x, tf.y); cx2.lineTo(ts.x, ts.y); cx2.stroke();
+    cx2.setLineDash([]);
   }
 
   // marcador do OSNAP (quadradinho verde no ponto capturado)
@@ -818,7 +880,18 @@ function reconstruir3d() {
       scene.add(m);
     }
 
-    // rampas: cunha (prisma triangular) — segmentada com patamares NBR 9050
+    // vigas: caixa horizontal sob a laje (cota do teto)
+    for (const e of elems.filter(e => e.tipo === 'viga')) {
+      const zBase = z0 + h - e.altura;
+      const g = new THREE.BoxGeometry(e.comprimento, e.altura, e.largura);
+      const m = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ color: '#7e57c2' }));
+      m.position.set(e.x, zBase + e.altura / 2, -e.y);
+      m.rotation.y = e.angulo;
+      m.castShadow = true;
+      scene.add(m);
+    }
+
+    // rampas: cunha (prisma triangular) — segmentada com patamares NP EN 17210
     for (const e of elems.filter(e => e.tipo === 'rampa')) {
       const g = new THREE.BufferGeometry();
       const L = e.comprimento, W = e.largura, D = e.desnivel;
@@ -1003,6 +1076,28 @@ cv2.addEventListener('mousedown', ev => {
       preview = null; salvarEstado(); sincronizar();
     }
     desenhar2d();
+  } else if (ferramenta === 'viga') {
+    if (!preview) { preview = { pontos: [{ x: mx, y: my }] }; }
+    else {
+      const p1 = preview.pontos[0];
+      const vao = Math.hypot(mx - p1.x, my - p1.y);
+      if (vao < 0.3) { alert('Viga muito curta — clique o início e depois o fim.'); return; }
+      const dim = dimensionarViga(vao);
+      const a = andarAtivo();
+      projeto.elementos.push({ id: ++uid, tipo: 'viga', andar: projeto.idAndarAtivo,
+        x: (p1.x + mx) / 2, y: (p1.y + my) / 2,
+        comprimento: vao, angulo: Math.atan2(my - p1.y, mx - p1.x),
+        largura: dim.largura, altura: dim.altura,
+        peDireito: a.alturaPisoPiso - dim.altura });
+      preview = null; salvarEstado(); sincronizar();
+    }
+    desenhar2d();
+  } else if (ferramenta === 'texto') {
+    const txt = prompt('Texto da anotação:', opcoesFerramenta.texto.texto);
+    if (!txt) return;
+    projeto.elementos.push({ id: ++uid, tipo: 'texto', andar: projeto.idAndarAtivo,
+      x: mx, y: my, texto: txt, tamanho: 12 });
+    salvarEstado(); sincronizar();
   } else if (ferramenta === 'rampa') {
     if (!preview) { preview = { pontos: [{ x: mx, y: my }] }; }
     else {
@@ -1092,6 +1187,7 @@ cv2.addEventListener('mousedown', ev => {
 
 cv2.addEventListener('mousemove', ev => {
   let m = posMouse2d(ev);
+  mouseFisico = { x: m.x, y: m.y };  // posição real do cursor (para a régua cruzada)
   // OSNAP: buscar ponto notável próximo do cursor (em pixels)
   const os = buscarOsnap(ev.offsetX, ev.offsetY);
   if (os) {
@@ -1111,13 +1207,18 @@ cv2.addEventListener('mousemove', ev => {
   }
   // ORTHO: quando há ponto-base (parede/rampa/escada em traçado), restringir a 90°
   const base = preview?.pontos?.[preview.pontos.length - 1];
-  if (base && (ferramenta === 'parede' || ferramenta === 'rampa' || ferramenta === 'escada')) {
+  if (base && (ferramenta === 'parede' || ferramenta === 'rampa' || ferramenta === 'escada' || ferramenta === 'viga')) {
     m = aplicarOrtho(base, m);
   }
   mouse2d = { x: m.x, y: m.y };
   // coordenadas ao vivo na barra de status (formato CAD)
   const stC = $('#stCoord');
-  if (stC) stC.textContent = `${m.x.toFixed(2)}, ${m.y.toFixed(2)}`;
+  if (stC) {
+    const difere = Math.abs(m.x - mouseFisico.x) > 1e-9 || Math.abs(m.y - mouseFisico.y) > 1e-9;
+    stC.textContent = difere
+      ? `${m.x.toFixed(2)}, ${m.y.toFixed(2)} (snap: ${mouseFisico.x.toFixed(2)}, ${mouseFisico.y.toFixed(2)})`
+      : `${m.x.toFixed(2)}, ${m.y.toFixed(2)}`;
+  }
   if (arrastando2d?.tipo === 'pan') {
     camera2d.cx -= (ev.clientX - arrastando2d.x) / camera2d.escala;
     camera2d.cy += (ev.clientY - arrastando2d.y) / camera2d.escala;
@@ -1126,7 +1227,7 @@ cv2.addEventListener('mousemove', ev => {
   if (ferramenta === 'medir' && medicao) { medicao.x2 = m.x; medicao.y2 = m.y; desenhar2d(); }
   else if (ferramenta === 'zoomJanela' && zoomJanelaAtivo) { zoomJanelaAtivo.x2 = m.x; zoomJanelaAtivo.y2 = m.y; desenhar2d(); }
   else if (ferramenta === 'corte' && corteAtivo != null) { const lc = cortes.find(x => x.id === corteAtivo); if (lc) { lc.x2 = m.x; lc.y2 = m.y; desenhar2d(); } }
-  else if (['parede', 'laje', 'telhado', 'escada', 'rampa'].includes(ferramenta) && preview) desenhar2d();
+  else if (['parede', 'laje', 'telhado', 'escada', 'rampa', 'viga'].includes(ferramenta) && preview) desenhar2d();
   else atualizarCoordStatus(m);
 });
 
@@ -1178,6 +1279,16 @@ function elementoSobMouse(x, y) {
     const dx = x - e.x, dy = y - e.y;
     const lx = dx * co - dy * si, ly = dx * si + dy * co;
     if (Math.abs(lx) < def.larg / 2 && Math.abs(ly) < def.prof / 2) return e;
+  }
+  for (const e of projeto.elementos.filter(e => e.andar === projeto.idAndarAtivo && (e.tipo === 'escada' || e.tipo === 'rampa' || e.tipo === 'viga'))) {
+    const comp = e.comprimento, larg = e.tipo === 'viga' ? Math.max(e.largura, 0.3) : e.largura;
+    const c2 = Math.cos(-e.angulo), s2 = Math.sin(-e.angulo);
+    const dx = x - e.x, dy = y - e.y;
+    const lx = dx * c2 - dy * s2, ly = dx * s2 + dy * c2;
+    if (Math.abs(lx) < comp / 2 && Math.abs(ly) < larg / 2) return e;
+  }
+  for (const e of projeto.elementos.filter(e => e.andar === projeto.idAndarAtivo && e.tipo === 'texto')) {
+    if (Math.hypot(x - e.x, y - e.y) < 0.5) return e;
   }
   for (const e of projeto.elementos.filter(e => e.andar === projeto.idAndarAtivo && (e.tipo === 'escada' || e.tipo === 'rampa'))) {
     const comp = e.tipo === 'rampa' ? e.comprimento : e.comprimento;
@@ -1253,16 +1364,24 @@ function atualizarPainelProps() {
              inp('x', 'X (m)') + inp('y', 'Y (m)') +
              inp('larg', 'Largura (m)', 0.05) + inp('prof', 'Profundidade (m)', 0.05) + inp('alt', 'Altura (m)', 0.05) +
              `<tr><td>Rotação</td><td><input data-campo="angulo" type="number" step="15" value="${Math.round((e.angulo || 0) * 180 / Math.PI)}" data-graus="1"> º</td></tr>`;
+  } else if (e.tipo === 'viga') {
+    const dimAuto = dimensionarViga(e.comprimento);
+    linhas = inp('comprimento', 'Vão (m)', 0.05) + inp('largura', 'Largura bw (m)', 0.01) + inp('altura', 'Altura h (m)', 0.01) +
+             `<tr><td>Eurocódigo 2</td><td>h ≈ vão/12 → ${dimAuto.altura.toFixed(2).replace('.', ',')}×${dimAuto.largura.toFixed(2).replace('.', ',')} m</td></tr>` +
+             `<tr><td>Pé-direito</td><td>${(e.peDireito ?? (andarAtivo().alturaPisoPiso - e.altura)).toFixed(2).replace('.', ',')} m sob a viga</td></tr>`;
+  } else if (e.tipo === 'texto') {
+    linhas = `<tr><td>Texto</td><td><input data-campo="texto" type="text" value="${String(e.texto).replace(/"/g, '&quot;')}"></td></tr>` +
+             inp('x', 'X (m)') + inp('y', 'Y (m)') + inp('tamanho', 'Tamanho (px)', 1);
   } else if (e.tipo === 'rampa') {
     const ok = e.inclinacao <= RAMPAS_CFG.inclinacaoMax + 0.01;
     linhas = inp('comprimento', 'Comprimento (m)', 0.05) + inp('largura', 'Largura (m)', 0.05) +
              inp('desnivel', 'Desnível (m)', 0.05) +
-             `<tr><td>Inclinação</td><td>${e.inclinacao.toFixed(2).replace('.', ',')}% ${ok ? '✓' : '⚠ > 8,33% (NBR 9050)'}</td></tr>` +
-             `<tr><td>Compr. mín.</td><td>${comprimentoRampa(e.desnivel, RAMPAS_CFG.inclinacaoMax).toFixed(2).replace('.', ',')} m (p/ 8,33%)</td></tr>`;
+             `<tr><td>Inclinação</td><td>${e.inclinacao.toFixed(2).replace('.', ',')}% ${ok ? '✓' : '⚠ > 8% (NP EN 17210)'}</td></tr>` +
+             `<tr><td>Compr. mín.</td><td>${comprimentoRampa(e.desnivel, RAMPAS_CFG.inclinacaoMax).toFixed(2).replace('.', ',')} m (p/ 8%)</td></tr>`;
     if (e.comprimento > RAMPAS_CFG.maxSegmento) {
       const segs = segmentarRampa(e.comprimento, e.largura);
       const nPat = segs.filter(s => s.tipo === 'patamar').length;
-      linhas += `<tr><td>Patamares</td><td>${nPat} × ${RAMPAS_CFG.patamar.toFixed(2).replace('.', ',')} m (NBR 9050)</td></tr>`;
+      linhas += `<tr><td>Patamares</td><td>${nPat} × ${RAMPAS_CFG.patamar.toFixed(2).replace('.', ',')} m (DL 163/2006)</td></tr>`;
     }
   } else if (e.tipo === 'telhado') {
     // vão aproximado: distância média entre vértices opostos
@@ -1283,6 +1402,7 @@ function atualizarPainelProps() {
     <div style="margin-top:8px"><button class="btn-pequeno" id="btnExcluir">Excluir elemento</button></div>`;
   div.querySelectorAll('input[data-campo]').forEach(i => i.addEventListener('change', () => {
     if (i.dataset.graus) e[i.dataset.campo] = (parseFloat(i.value) || 0) * Math.PI / 180;
+    else if (i.type === 'text' || i.dataset.campo === 'texto') e[i.dataset.campo] = i.value;
     else e[i.dataset.campo] = parseFloat(i.value) || 0;
     if (e.tipo === 'rampa' && ['comprimento', 'desnivel'].includes(i.dataset.campo)) {
       e.inclinacao = (e.desnivel / Math.max(0.01, e.comprimento)) * 100;
@@ -1465,13 +1585,25 @@ const OSNAP_RAIO = 12;   // px de tolerância
 // pontos notáveis de todas as paredes do pavimento
 function pontosOsnap() {
   const pts = [];
-  for (const e of projeto.elementos.filter(x => x.andar === projeto.idAndarAtivo && x.tipo === 'parede')) {
-    pts.push({ x: e.x1, y: e.y1, tipo: 'extremo' }, { x: e.x2, y: e.y2, tipo: 'extremo' });
-    pts.push({ x: (e.x1 + e.x2) / 2, y: (e.y1 + e.y2) / 2, tipo: 'médio' });
-    // interseções com outras paredes
+  const elems = projeto.elementos.filter(x => x.andar === projeto.idAndarAtivo);
+  for (const e of elems) {
+    if (e.tipo === 'parede') {
+      pts.push({ x: e.x1, y: e.y1, tipo: 'extremo' }, { x: e.x2, y: e.y2, tipo: 'extremo' });
+      pts.push({ x: (e.x1 + e.x2) / 2, y: (e.y1 + e.y2) / 2, tipo: 'médio' });
+    } else if (e.tipo === 'coluna') {
+      pts.push({ x: e.x, y: e.y, tipo: 'centro' });
+    } else if ((e.tipo === 'laje' || e.tipo === 'telhado') && e.pontos && e.pontos.length >= 3) {
+      let ax = 0, ay = 0, aa = 0;
+      for (let i = 0; i < e.pontos.length; i++) {
+        const p1 = e.pontos[i], p2 = e.pontos[(i + 1) % e.pontos.length];
+        const cruz = p1.x * p2.y - p2.x * p1.y;
+        aa += cruz; ax += (p1.x + p2.x) * cruz; ay += (p1.y + p2.y) * cruz;
+      }
+      if (Math.abs(aa) > 1e-9) pts.push({ x: ax / (3 * aa), y: ay / (3 * aa), tipo: 'centro' });
+    }
   }
+  const paredes = elems.filter(x => x.tipo === 'parede');
   // interseções parede×parede
-  const paredes = projeto.elementos.filter(x => x.andar === projeto.idAndarAtivo && x.tipo === 'parede');
   for (let i = 0; i < paredes.length; i++) for (let j = i + 1; j < paredes.length; j++) {
     const inter = interseccaoLinhas(
       { x: paredes[i].x1, y: paredes[i].y1 }, { x: paredes[i].x2, y: paredes[i].y2 },
@@ -1630,7 +1762,7 @@ const ATALHOS_FERRAMENTA = {
   'l': 'laje', 'c': 'coluna', 'e': 'escada', 'r': 'rampa',
   't': 'telhado', 'o': 'objeto',
   'g': 'corte', 'h': 'terreno',
-  'p': 'pontoInst', 'q': 'circuito',
+  'p': 'pontoInst', 'q': 'circuito', 'v': 'viga', 'a': 'texto',
 };
 function ativarFerramenta(nome) {
   const botao = document.querySelector(`.btn-ribbon[data-ferr="${nome}"]`);
@@ -2405,7 +2537,7 @@ function relatorioIluminacao() {
     comodos.sort((x, y) => y.area - x.area);
     for (let i = 0; i < comodos.length; i++) {
       const com = comodos[i];
-      const minimo = com.area / 6; // regra prática: 1/6 da área de piso
+      const minimo = com.area / 8; // RGEU art. 82.º: 1/8 da área do pavimento
       const ok = com.areaJanelas >= minimo;
       linhas.push({
         andar: a.nome, nome: `Cômodo ${i + 1}`,
@@ -2429,7 +2561,7 @@ function mostrarIluminacao() {
   ctx.fillStyle = '#222'; ctx.font = `bold ${15 * devicePixelRatio}px sans-serif`;
   ctx.fillText('Iluminação natural por cômodo', 40, 40);
   ctx.font = `${11 * devicePixelRatio}px sans-serif`; ctx.fillStyle = '#666';
-  ctx.fillText(`Referência prática: área de esquadrias ≥ 1/6 da área de piso (NBR contexto residencial)`, 40, 60);
+  ctx.fillText(`RGEU art. 82.º: área de envidraçado ≥ 1/8 da área do pavimento`, 40, 60);
 
   if (!linhas.length) {
     ctx.fillStyle = '#888'; ctx.font = `${13 * devicePixelRatio}px sans-serif`;
@@ -2774,6 +2906,10 @@ function calcularQuantitativos() {
       else if (e.tipo === 'janela') porAndar[a.id].janelas++;
       else if (e.tipo === 'coluna') porAndar[a.id].colunas++;
       else if (e.tipo === 'escada') porAndar[a.id].escadas++; else if (e.tipo === 'rampa') porAndar[a.id].rampas = (porAndar[a.id].rampas || 0) + 1;
+      else if (e.tipo === 'viga') {
+        porAndar[a.id].vigaComp = (porAndar[a.id].vigaComp || 0) + (e.comprimento || 0);
+        porAndar[a.id].vigaVol = (porAndar[a.id].vigaVol || 0) + ((e.comprimento || 0) * (e.largura || 0) * (e.altura || 0));
+      }
       else if (e.tipo === 'pontoEletrico') porAndar[a.id].pontosEletricos++;
       else if (e.tipo === 'pontoHidraulico') porAndar[a.id].pontosHidraulicos++;
     }
@@ -2786,6 +2922,8 @@ function calcularQuantitativos() {
     acc.portas += p.portas; acc.janelas += p.janelas; acc.colunas += p.colunas;
     acc.escadas += p.escadas; acc.pe += p.pontosEletricos; acc.ph += p.pontosHidraulicos;
     acc.rampas = (acc.rampas || 0) + (p.rampas || 0);
+    acc.vigaComp = (acc.vigaComp || 0) + (p.vigaComp || 0);
+    acc.vigaVol = (acc.vigaVol || 0) + (p.vigaVol || 0);
     return acc;
   }, { paredeComp: 0, paredeArea: 0, paredeVol: 0, lajeArea: 0, lajeVol: 0, portas: 0, janelas: 0, colunas: 0, escadas: 0, pe: 0, ph: 0 });
 
@@ -2802,6 +2940,8 @@ function calcularQuantitativos() {
     { item: 'Colunas', qtd: tot.colunas, un: 'un' },
     { item: 'Escadas (lances)', qtd: tot.escadas, un: 'un' },
     { item: 'Rampas de acessibilidade', qtd: tot.rampas || 0, un: 'un' },
+    { item: 'Vigas (comprimento)', qtd: tot.vigaComp || 0, un: 'm' },
+    { item: 'Vigas (volume/concreto)', qtd: tot.vigaVol || 0, un: 'm³' },
     { item: 'Pontos elétricos', qtd: tot.pe, un: 'un' },
     { item: 'Pontos hidráulicos', qtd: tot.ph, un: 'un' },
     { item: 'Fiação elétrica (circuitos)', qtd: fiação, un: 'm' }
@@ -3169,18 +3309,20 @@ $('#btnVent')?.addEventListener('click', mostrarVentilacao);
 // ---------------- Orçamento com preços editáveis ----------------
 // preços padrão por item (R$), editáveis e persistidos no localStorage
 const PRECOS_PADRAO = {
-  'Alvenaria/parede (comprimento)': 95,
-  'Alvenaria/parede (área de parede)': 55,
-  'Alvenaria/parede (volume)': 380,
-  'Laje (área)': 45,
-  'Laje (volume/concreto)': 420,
-  'Portas': 450,
-  'Janelas': 520,
-  'Colunas': 280,
-  'Escadas (lances)': 1800,
-  'Pontos elétricos': 85,
-  'Pontos hidráulicos': 160,
-  'Fiação elétrica (circuitos)': 12
+  'Alvenaria/parede (comprimento)': 45,
+  'Alvenaria/parede (área de parede)': 26,
+  'Alvenaria/parede (volume)': 180,
+  'Laje (área)': 22,
+  'Laje (volume/concreto)': 200,
+  'Portas': 210,
+  'Janelas': 240,
+  'Colunas': 130,
+  'Escadas (lances)': 850,
+  'Pontos elétricos': 40,
+  'Pontos hidráulicos': 75,
+  'Fiação elétrica (circuitos)': 6,
+  'Vigas (comprimento)': 45,
+  'Vigas (volume/concreto)': 220
 };
 function obterPrecos() {
   try {
@@ -3215,7 +3357,7 @@ function mostrarOrcamento() {
       <td style="padding:4px 8px;border-bottom:1px solid #ddd;text-align:right">
         <input data-item="${it.item}" type="number" step="0.01" min="0" value="${preco.toFixed(2)}" style="width:90px;text-align:right">
       </td>
-      <td style="padding:4px 8px;border-bottom:1px solid #ddd;text-align:right" data-sub="${it.item}">R$ ${sub.toFixed(2).replace('.', ',')}</td>
+      <td style="padding:4px 8px;border-bottom:1px solid #ddd;text-align:right" data-sub="${it.item}">€ ${sub.toFixed(2).replace('.', ',')}</td>
     </tr>`;
   }).join('');
   box.innerHTML = `
@@ -3223,13 +3365,13 @@ function mostrarOrcamento() {
       <tr style="background:#2b2f36;color:#fff">
         <th style="padding:6px 8px;text-align:left">Item</th>
         <th style="padding:6px 8px;text-align:right">Qtd</th>
-        <th style="padding:6px 8px;text-align:right">Preço unit. (R$)</th>
+        <th style="padding:6px 8px;text-align:right">Preço unit. (€)</th>
         <th style="padding:6px 8px;text-align:right">Subtotal</th>
       </tr>
       ${linhasHtml}
       <tr>
         <td colspan="3" style="padding:8px;text-align:right"><b>TOTAL</b></td>
-        <td style="padding:8px;text-align:right"><b id="totalOrc">R$ ${total.toFixed(2).replace('.', ',')}</b></td>
+        <td style="padding:8px;text-align:right"><b id="totalOrc">€ ${total.toFixed(2).replace('.', ',')}</b></td>
       </tr>
     </table>
     <div style="margin-top:10px;font-size:11px;color:#777">Edite os preços — os subtotais recalculam e ficam salvos no navegador.</div>`;
@@ -3248,7 +3390,7 @@ $('#btnOrc')?.addEventListener('click', mostrarOrcamento);
 function exportarCSVOrcamento() {
   const { itens } = calcularQuantitativos();
   const precos = obterPrecos();
-  const linhas = ['Item;Quantidade;Unidade;Preco unitario (R$);Subtotal (R$)'];
+  const linhas = ['Item;Quantidade;Unidade;Preco unitario (EUR);Subtotal (EUR)'];
   let total = 0;
   for (const it of itens) {
     const preco = precos[it.item] ?? 0;
@@ -3587,6 +3729,22 @@ function exportarIFC() {
       add(`#${pos}=IFCAXIS2PLACEMENT3D(#${xyz(0,0,0)},$,$);`);
       const pds = corpoExtrudado(idPerfil, def.alt, pos);
       add(`#${novoId()}=IFCFURNITURE('${guidIFC()}',#${idDono},'${escIFC(def.nome)} ${e.id}',$,$,#${idsPlaceAndar[a.id]},#${pds},$);`);
+    }
+
+    for (const e of elems.filter(e => e.tipo === 'viga')) {
+      const idPerfil = novoId();
+      const hw = e.largura / 2, hh = e.altura / 2;
+      const t1 = xyz(-e.comprimento/2, -hh, -hw), t2 = xyz(e.comprimento/2, -hh, -hw),
+            t3 = xyz(e.comprimento/2, hh, -hw), t4 = xyz(-e.comprimento/2, hh, -hw);
+      const poly = novoId();
+      add(`#${poly}=IFCPOLYLINE((#${t1},#${t2},#${t3},#${t4},#${t1}));`);
+      add(`#${idPerfil}=IFCARBITRARYCLOSEDPROFILEDEF(.AREA.,$,#${poly});`);
+      const pos = novoId();
+      const dRef = dir(Math.cos(e.angulo), Math.sin(e.angulo), 0);
+      const oB = xyz(e.x, -e.y, z0 + h - e.altura);
+      add(`#${pos}=IFCAXIS2PLACEMENT3D(#${oB},#1,#${dRef});`);
+      const pds = corpoExtrudado(idPerfil, e.largura, pos);
+      add(`#${novoId()}=IFCBEAM('${guidIFC()}',#${idDono},'Viga ${e.id} (${Math.round(e.largura*100)}x${Math.round(e.altura*100)})',$,$,#${idsPlaceAndar[a.id]},#${pds},$);`);
     }
 
     for (const e of elems.filter(e => e.tipo === 'rampa')) {
