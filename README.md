@@ -13,7 +13,7 @@ Não precisa instalar nada. Basta dar **duplo clique no `index.html`** em um nav
 | Categoria | Recurso |
 |---|---|
 | **Desenho 2D** | Planta com grade métrica, snap ajustável (0,25 m padrão), zoom (roda do mouse) e pan (botão do meio ou Espaço + arrastar) |
-| **Ferramentas** | Parede, Porta, Janela (peitoril), Laje, Coluna, Escada, Rampa NBR 9050 (patamares), **Viga (dimensionamento NBR 6118)**, Telhado, Objeto, **Texto/anotações**, Medir, Corte, Apagar |
+| **Ferramentas** | Parede, Porta, Janela (peitoril), Laje, Coluna, Escada, Rampa NP EN 17210 (patamares DL 163/2006), **Viga (Eurocódigo 2)**, Telhado, Objeto, **Texto/anotações**, Medir, Corte, Apagar |
 | **3D** | Vista orbital simultânea com paredes, aberturas recortadas, lajes, colunas e sombras |
 | **Propriedades** | Painel para editar dimensões, espessuras, posição de porta/janela na parede, peitoril |
 | **Pavimentos** | Múltiplos pavimentos com altura piso-a-piso configurável; isolamento por pavimento |
@@ -57,7 +57,7 @@ Não precisa instalar nada. Basta dar **duplo clique no `index.html`** em um nav
 | `E` | Escada | | `P` | Ponto de instalação |
 | `R` | Rampa | | `Q` | Circuito elétrico |
 | `T` | Telhado | | `O` | Objeto |
-| `V` | Viga (NBR 6118) | | `A` | Texto/anotação |
+| `V` | Viga (Eurocódigo 2) | | `A` | Texto/anotação |
 
 ### Comandos de navegação 2D (estilo CAD)
 

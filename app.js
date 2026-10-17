@@ -111,12 +111,12 @@ const DICAS_FERR = {
   laje: 'Clique os vértices; duplo clique ou clique perto do 1º ponto fecha o polígono.',
   coluna: 'Clique o centro da coluna.',
   escada: 'Clique o início e depois o fim do lance — degraus calculados (~28 cm).',
-  rampa: 'Clique o ponto BAIXO e depois o ALTO — inclinação máx. 8,33% (NBR 9050).',
+  rampa: 'Clique o ponto BAIXO e depois o ALTO — inclinação máx. 8% (NP EN 17210 / DL 163/2006).',
   telhado: 'Clique o polígono do beiral; duplo clique fecha.',
   objeto: 'Escolha o objeto no painel Biblioteca e clique na planta.',
   pontoInst: 'Escolha o ponto no painel Instalações e clique na planta.',
   circuito: 'Clique os pontos do trajeto (snap em tomadas); duplo clique finaliza.',
-  viga: 'Clique início e fim da viga — altura/largura automáticas (NBR 6118: h ≈ vão/10).',
+  viga: 'Clique início e fim da viga — altura/largura automáticas (Eurocódigo 2: h ≈ vão/12).',
   texto: 'Clique na planta para inserir a anotação; edite no painel de Propriedades.',
   corte: 'Clique início e fim da linha de corte — cada corte ganha rótulo (A, B...).',
   terreno: 'Clique para elevar; Shift+clique para rebaixar (pincel suave).',
@@ -150,20 +150,20 @@ function renderizarBarraOpcoes() {
   }));
 }
 
-// vigas: dimensionamento automático pela regra prática da NBR 6118
-// (h ≈ vão/10 para vigas biapoiadas; largura bw ≈ h/2 com mínimos de 12 cm)
+// vigas: pré-dimensionamento pela regra prática do Eurocódigo 2 (NP EN 1992-1-1)
+// (h ≈ vão/12 para vigas biapoiadas; bw ≈ h/2 com mínimos de 15 cm — EC2 §5.3.1.2)
 function dimensionarViga(vao) {
-  const altura = Math.max(0.15, Math.ceil((vao / 10) * 100) / 100);
-  const largura = Math.max(0.12, Math.ceil((altura / 2) * 100) / 100);
+  const altura = Math.max(0.20, Math.ceil((vao / 12) * 100) / 100);
+  const largura = Math.max(0.15, Math.ceil((altura / 2) * 100) / 100);
   return { altura, largura };
 }
 
-// rampas de acessibilidade (NBR 9050: inclinação máx. 8,33% = 1:12)
-const RAMPAS_CFG = { inclinacaoMax: 8.33, maxSegmento: 10, patamar: 1.5 }; // %, m por segmento, patamar m
+// rampas de acessibilidade (NP EN 17210:2021 / DL 163/2006: inclinação máx. 8% = 1:12,5)
+const RAMPAS_CFG = { inclinacaoMax: 8.0, maxSegmento: 10, patamar: 1.5 }; // % (NP EN 17210), m por segmento, patamar m (DL 163/2006)
 function comprimentoRampa(desnivel, inclinacaoPct) {
   return desnivel / (inclinacaoPct / 100);
 }
-// divide uma rampa em segmentos com patamares intermediários (NBR 9050)
+// divide uma rampa em segmentos com patamares intermediários (NP EN 17210 / DL 163/2006)
 function segmentarRampa(comprimento, largura) {
   const segs = [];
   let restante = comprimento;
@@ -375,7 +375,7 @@ function desenhar2d() {
     }
   }
 
-  // rampas (2D) — com segmentos e patamares NBR 9050
+  // rampas (2D) — com segmentos e patamares NP EN 17210
   for (const e of elems.filter(e => e.tipo === 'rampa')) {
     const p = mundoParaTela(e.x, e.y);
     const L = e.comprimento * camera2d.escala, W = e.largura * camera2d.escala;
@@ -385,7 +385,7 @@ function desenhar2d() {
     cx2.lineWidth = e.id === selecao ? 2 : 1;
     cx2.fillRect(-L / 2, -W / 2, L, W);
     cx2.strokeRect(-L / 2, -W / 2, L, W);
-    // segmentos com patamares (NBR 9050) desenhados por cima
+    // segmentos com patamares (NP EN 17210) desenhados por cima
     if (e.comprimento > RAMPAS_CFG.maxSegmento) {
       const segs = segmentarRampa(e.comprimento, e.largura);
       let cursor = -L / 2;
@@ -414,10 +414,10 @@ function desenhar2d() {
     cx2.font = 'bold 10px sans-serif'; cx2.textAlign = 'center';
     const pct = e.inclinacao.toFixed(2).replace('.', ',') + '%';
     if (L > 46) cx2.fillText(pct, 0, -4);
-    // aviso NBR se exceder 8,33%
+    // aviso se exceder 8% (NP EN 17210)
     if (e.inclinacao > RAMPAS_CFG.inclinacaoMax + 0.01) {
       cx2.fillStyle = '#c62828';
-      cx2.fillText('⚠ NBR 9050', 0, W / 2 + 12);
+      cx2.fillText('⚠ NP EN 17210', 0, W / 2 + 12);
     }
     cx2.restore();
   }
@@ -891,7 +891,7 @@ function reconstruir3d() {
       scene.add(m);
     }
 
-    // rampas: cunha (prisma triangular) — segmentada com patamares NBR 9050
+    // rampas: cunha (prisma triangular) — segmentada com patamares NP EN 17210
     for (const e of elems.filter(e => e.tipo === 'rampa')) {
       const g = new THREE.BufferGeometry();
       const L = e.comprimento, W = e.largura, D = e.desnivel;
@@ -1367,7 +1367,7 @@ function atualizarPainelProps() {
   } else if (e.tipo === 'viga') {
     const dimAuto = dimensionarViga(e.comprimento);
     linhas = inp('comprimento', 'Vão (m)', 0.05) + inp('largura', 'Largura bw (m)', 0.01) + inp('altura', 'Altura h (m)', 0.01) +
-             `<tr><td>NBR 6118</td><td>h ≈ vão/10 → ${dimAuto.altura.toFixed(2).replace('.', ',')}×${dimAuto.largura.toFixed(2).replace('.', ',')} m</td></tr>` +
+             `<tr><td>Eurocódigo 2</td><td>h ≈ vão/12 → ${dimAuto.altura.toFixed(2).replace('.', ',')}×${dimAuto.largura.toFixed(2).replace('.', ',')} m</td></tr>` +
              `<tr><td>Pé-direito</td><td>${(e.peDireito ?? (andarAtivo().alturaPisoPiso - e.altura)).toFixed(2).replace('.', ',')} m sob a viga</td></tr>`;
   } else if (e.tipo === 'texto') {
     linhas = `<tr><td>Texto</td><td><input data-campo="texto" type="text" value="${String(e.texto).replace(/"/g, '&quot;')}"></td></tr>` +
@@ -1376,12 +1376,12 @@ function atualizarPainelProps() {
     const ok = e.inclinacao <= RAMPAS_CFG.inclinacaoMax + 0.01;
     linhas = inp('comprimento', 'Comprimento (m)', 0.05) + inp('largura', 'Largura (m)', 0.05) +
              inp('desnivel', 'Desnível (m)', 0.05) +
-             `<tr><td>Inclinação</td><td>${e.inclinacao.toFixed(2).replace('.', ',')}% ${ok ? '✓' : '⚠ > 8,33% (NBR 9050)'}</td></tr>` +
-             `<tr><td>Compr. mín.</td><td>${comprimentoRampa(e.desnivel, RAMPAS_CFG.inclinacaoMax).toFixed(2).replace('.', ',')} m (p/ 8,33%)</td></tr>`;
+             `<tr><td>Inclinação</td><td>${e.inclinacao.toFixed(2).replace('.', ',')}% ${ok ? '✓' : '⚠ > 8% (NP EN 17210)'}</td></tr>` +
+             `<tr><td>Compr. mín.</td><td>${comprimentoRampa(e.desnivel, RAMPAS_CFG.inclinacaoMax).toFixed(2).replace('.', ',')} m (p/ 8%)</td></tr>`;
     if (e.comprimento > RAMPAS_CFG.maxSegmento) {
       const segs = segmentarRampa(e.comprimento, e.largura);
       const nPat = segs.filter(s => s.tipo === 'patamar').length;
-      linhas += `<tr><td>Patamares</td><td>${nPat} × ${RAMPAS_CFG.patamar.toFixed(2).replace('.', ',')} m (NBR 9050)</td></tr>`;
+      linhas += `<tr><td>Patamares</td><td>${nPat} × ${RAMPAS_CFG.patamar.toFixed(2).replace('.', ',')} m (DL 163/2006)</td></tr>`;
     }
   } else if (e.tipo === 'telhado') {
     // vão aproximado: distância média entre vértices opostos
@@ -2537,7 +2537,7 @@ function relatorioIluminacao() {
     comodos.sort((x, y) => y.area - x.area);
     for (let i = 0; i < comodos.length; i++) {
       const com = comodos[i];
-      const minimo = com.area / 6; // regra prática: 1/6 da área de piso
+      const minimo = com.area / 8; // RGEU art. 82.º: 1/8 da área do pavimento
       const ok = com.areaJanelas >= minimo;
       linhas.push({
         andar: a.nome, nome: `Cômodo ${i + 1}`,
@@ -2561,7 +2561,7 @@ function mostrarIluminacao() {
   ctx.fillStyle = '#222'; ctx.font = `bold ${15 * devicePixelRatio}px sans-serif`;
   ctx.fillText('Iluminação natural por cômodo', 40, 40);
   ctx.font = `${11 * devicePixelRatio}px sans-serif`; ctx.fillStyle = '#666';
-  ctx.fillText(`Referência prática: área de esquadrias ≥ 1/6 da área de piso (NBR contexto residencial)`, 40, 60);
+  ctx.fillText(`RGEU art. 82.º: área de envidraçado ≥ 1/8 da área do pavimento`, 40, 60);
 
   if (!linhas.length) {
     ctx.fillStyle = '#888'; ctx.font = `${13 * devicePixelRatio}px sans-serif`;
