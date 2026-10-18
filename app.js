@@ -1141,8 +1141,22 @@ cv2.addEventListener('mousedown', ev => {
     desenhar2d();
     return;
   }
-  // reutilizar a posição já tratada pelo OSNAP/ORTHO do mousemove (mais precisa)
-  const m = (ev.type === 'mousedown') ? mouse2d : posMouse2d(ev);
+  // recalcular a posição com o fluxo completo de snap (osnap → ortho → grade) a partir do evento,
+  // para não depender de um mousemove anterior (pode estar desatualizado — causa do 'offset')
+  let mClick = posMouse2d(ev);
+  const osClick = buscarOsnap(ev.offsetX, ev.offsetY);
+  if (osClick) {
+    mClick = { x: osClick.x, y: osClick.y };
+  } else {
+    const spClick = snapParede(mClick);
+    if (spClick) mClick = { x: spClick.x, y: spClick.y };
+    else mClick = { x: aplicarSnap(mClick.x), y: aplicarSnap(mClick.y) };
+  }
+  const baseClick = preview?.pontos?.[preview.pontos.length - 1];
+  if (baseClick && ['parede', 'rampa', 'escada', 'viga'].includes(ferramenta)) {
+    mClick = aplicarOrtho(baseClick, mClick);
+  }
+  const m = mClick;
   const mx = m.x, my = m.y;
 
   if (ferramenta === 'parede') {
@@ -1734,9 +1748,9 @@ function pontosOsnap() {
     const inter = interseccaoLinhas(
       { x: paredes[i].x1, y: paredes[i].y1 }, { x: paredes[i].x2, y: paredes[i].y2 },
       { x: paredes[j].x1, y: paredes[j].y1 }, { x: paredes[j].x2, y: paredes[j].y2 });
-    if (inter && inter.u >= 0 && inter.u <= 1) {
-      const px = paredes[i].x1 + (paredes[i].x2 - paredes[i].x1) * inter.u;
-      const py = paredes[i].y1 + (paredes[i].y2 - paredes[i].y1) * inter.u;
+    if (inter && inter.t >= 0 && inter.t <= 1 && inter.u >= 0 && inter.u <= 1) {
+      const px = paredes[i].x1 + (paredes[i].x2 - paredes[i].x1) * inter.t;
+      const py = paredes[i].y1 + (paredes[i].y2 - paredes[i].y1) * inter.t;
       pts.push({ x: px, y: py, tipo: 'interseção' });
     }
   }
@@ -1756,7 +1770,9 @@ function buscarOsnap(mxTela, myTela) {
 // snap magnético: ponto mais próximo em qualquer parede (projeção perpendicular)
 function snapParede(mLivre) {
   if (!osnapAtivo) return null;
-  let melhor = null, melhorD = 0.22; // tolerância em metros (~22 cm no mundo)
+  // tolerância na tela: 12 px convertidos para metros pela escala atual (consistente em qualquer zoom)
+  const tolPx = 12 / Math.max(1, camera2d.escala);
+  let melhor = null, melhorD = tolPx;
   for (const e of projeto.elementos.filter(x => x.andar === projeto.idAndarAtivo && x.tipo === 'parede')) {
     const d = distanciaPontoSegmento(mLivre.x, mLivre.y, e.x1, e.y1, e.x2, e.y2);
     if (d < melhorD) {
