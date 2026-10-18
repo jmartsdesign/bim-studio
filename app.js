@@ -1875,16 +1875,18 @@ function limitesDesenho() {
 // comando: remover elementos 'fantasma' criados pelo antigo bug de snap (longe do desenho real)
 function limparElementosDistantes(raioMax = 60) {
   const antes = projeto.elementos.length;
-  // mediana do centroide dos elementos como referência
+  // mediana dos centros como referência do "coração" do desenho
   const centros = projeto.elementos.map(e => {
     if (e.tipo === 'parede') return { x: (e.x1 + e.x2) / 2, y: (e.y1 + e.y2) / 2 };
     if (e.x != null) return { x: e.x, y: e.y };
     if (e.pontos && e.pontos.length) return { x: e.pontos[0].x, y: e.pontos[0].y };
     return { x: 0, y: 0 };
   });
-  const med = { x: centros.sort((a, b) => a.x - b.x)[Math.floor(centros.length / 2)]?.x ?? 0,
-                y: centros.sort((a, b) => a.y - b.y)[Math.floor(centros.length / 2)]?.y ?? 0 };
-  projeto.elementos = projeto.elementos.filter(e => {
+  const xs = centros.map(p => p.x).sort((a, b) => a - b);
+  const ys = centros.map(p => p.y).sort((a, b) => a - b);
+  const med = { x: xs[Math.floor(xs.length / 2)] ?? 0, y: ys[Math.floor(ys.length / 2)] ?? 0 };
+  // avaliar SEM mutar: aborta se limparia tudo (desenho legítimo mas disperso)
+  const filtrado = projeto.elementos.filter(e => {
     let cx, cy;
     if (e.tipo === 'parede') { cx = (e.x1 + e.x2) / 2; cy = (e.y1 + e.y2) / 2; }
     else if (e.x != null) { cx = e.x; cy = e.y; }
@@ -1892,8 +1894,9 @@ function limparElementosDistantes(raioMax = 60) {
     else return true;
     return Math.hypot(cx - med.x, cy - med.y) <= raioMax;
   });
-  const removidos = antes - projeto.elementos.length;
-  if (removidos > 0) { salvarEstado(); sincronizar(); }
+  if (filtrado.length === 0 && antes > 0) return 0; // segurança: nunca apagar o projeto inteiro
+  const removidos = antes - filtrado.length;
+  if (removidos > 0) { projeto.elementos = filtrado; salvarEstado(); sincronizar(); }
   return removidos;
 }
 
