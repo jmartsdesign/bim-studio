@@ -28,7 +28,7 @@ let arrastando2d = null;    // { tipo: 'pan' | 'mover' | ... }
 let elementoArrastado = null;
 let mostrarCotas = true;
 
-const nomeTipo = (t) => ({ parede: 'Parede', porta: 'Porta', janela: 'Janela', laje: 'Laje', coluna: 'Coluna', escada: 'Escada', telhado: 'Telhado', objeto: 'Objeto', pontoEletrico: 'Ponto elétrico', pontoHidraulico: 'Ponto hidráulico', rampa: 'Rampa', viga: 'Viga', texto: 'Texto', zoomJanela: 'Zoom Janela', pan: 'Pan' }[t] || t);
+const nomeTipo = (t) => ({ parede: 'Parede', porta: 'Porta', janela: 'Janela', laje: 'Laje', coluna: 'Coluna', escada: 'Escada', telhado: 'Telhado', objeto: 'Objeto', pontoEletrico: 'Ponto elétrico', pontoHidraulico: 'Ponto hidráulico', rampa: 'Rampa', viga: 'Viga', texto: 'Texto', teto: 'Teto rebaixado', zoomJanela: 'Zoom Janela', pan: 'Pan' }[t] || t);
 
 // ---------------- Biblioteca de objetos ----------------
 const BIBLIOTECA = {
@@ -75,11 +75,36 @@ const CAMADAS = {
 };
 const CAMADA_TIPOS = {
   parede: 'arquitetura', porta: 'arquitetura', janela: 'arquitetura', laje: 'arquitetura',
-  coluna: 'arquitetura', escada: 'arquitetura', telhado: 'arquitetura', objeto: 'arquitetura', rampa: 'arquitetura', viga: 'arquitetura', texto: 'arquitetura',
+  coluna: 'arquitetura', escada: 'arquitetura', telhado: 'arquitetura', objeto: 'arquitetura', rampa: 'arquitetura', viga: 'arquitetura', texto: 'arquitetura', teto: 'arquitetura',
   pontoEletrico: 'eletrica', pontoHidraulico: 'hidraulica'
 };
 const camadaDe = (e) => e.camada || CAMADA_TIPOS[e.tipo] || 'arquitetura';
 const letraCorte = (i) => String.fromCharCode(65 + i); // A, B, C...
+
+// corrimãos de escada com newels (montantes) — NP EN 17210: altura 0,90 m
+const CORRIMAO_CFG = { altura: 0.90, newelLargura: 0.08, peDireitoMin: 2.0 };
+// posições dos newels ao longo da escada: base, topo (+ intermédios a cada N degraus)
+function newelsEscada(escada) {
+  const nDeg = Math.max(2, Math.round(escada.degraus));
+  const pts = [];
+  const c = Math.cos(escada.angulo), s = Math.sin(escada.angulo);
+  const passoDeg = escada.comprimento / nDeg;
+  // newel na base e no topo (recuados meia largura da escada)
+  const offsets = [-escada.comprimento / 2 + 0.10, escada.comprimento / 2 - 0.10];
+  // intermédios: 1 newel a cada 1,80 m de escada (típico p/ guarda-corpo)
+  for (let d = 1.80; d < escada.comprimento - 0.5; d += 1.80) {
+    offsets.push(-escada.comprimento / 2 + d);
+  }
+  offsets.sort((a, b) => a - b);
+  for (const off of offsets) {
+    pts.push({
+      x: escada.x + c * off,
+      y: escada.y + s * off,
+      alturaDeg: ((off + escada.comprimento / 2) / escada.comprimento) // fração da altura da escada neste ponto
+    });
+  }
+  return pts;
+}
 
 // ---- barra de opções contextuais (tipo Revit) ----
 const opcoesFerramenta = {  // valores padrão editáveis na barra
@@ -92,6 +117,7 @@ const opcoesFerramenta = {  // valores padrão editáveis na barra
   objeto:    {},
   pontoInst: {},
   laje:      { espessura: 0.2 },
+  teto:      { rebaixo: 0.3 },
   telhado:   { altura: 1.8, espessura: 0.15 },
   circuito:  {},
   viga:      { auto: 1 },
@@ -118,6 +144,7 @@ const DICAS_FERR = {
   circuito: 'Clique os pontos do trajeto (snap em tomadas); duplo clique finaliza.',
   viga: 'Clique início e fim da viga — altura/largura automáticas (Eurocódigo 2: h ≈ vão/12).',
   texto: 'Clique na planta para inserir a anotação; edite no painel de Propriedades.',
+  teto: 'Clique os vértices do teto rebaixado; duplo clique fecha o polígono.',
   corte: 'Clique início e fim da linha de corte — cada corte ganha rótulo (A, B...).',
   terreno: 'Clique para elevar; Shift+clique para rebaixar (pincel suave).',
   medir: 'Clique o ponto inicial, mova e clique novamente para fixar a medição.',
@@ -333,6 +360,41 @@ function desenhar2d() {
     }
     cx2.beginPath(); cx2.moveTo(-L / 2, 0); cx2.lineTo(L / 2, 0); cx2.stroke(); // linha de corte
     cx2.restore();
+  }
+
+  // corrimãos e newels de escadas (2D)
+  for (const e of elems.filter(e => e.tipo === 'escada')) {
+    if (!e.corrimao) continue;
+    const c = Math.cos(e.angulo), s = Math.sin(e.angulo);
+    const meiaLarg = e.largura / 2 - 0.06;
+    // linha do corrimão (paralela à escada, num lateral)
+    const p1 = mundoParaTela(e.x + c * (-e.comprimento / 2) - s * meiaLarg, e.y + s * (-e.comprimento / 2) + c * meiaLarg);
+    const p2 = mundoParaTela(e.x + c * (e.comprimento / 2) - s * meiaLarg, e.y + s * (e.comprimento / 2) + c * meiaLarg);
+    cx2.strokeStyle = '#8d6e63'; cx2.lineWidth = 2;
+    cx2.beginPath(); cx2.moveTo(p1.x, p1.y); cx2.lineTo(p2.x, p2.y); cx2.stroke();
+    // newels (quadradinhos marrons)
+    for (const nw of newelsEscada(e)) {
+      const p = mundoParaTela(nw.x - s * meiaLarg, nw.y + c * meiaLarg);
+      cx2.fillStyle = '#5d4037';
+      cx2.fillRect(p.x - 3, p.y - 3, 6, 6);
+    }
+  }
+
+  // tetos rebaixados (2D): contorno tracejado roxo
+  for (const e of elems.filter(e => e.tipo === 'teto')) {
+    if (!e.pontos || e.pontos.length < 3) continue;
+    cx2.strokeStyle = e.id === selecao ? '#1565c0' : '#9575cd';
+    cx2.lineWidth = e.id === selecao ? 2 : 1.2;
+    cx2.setLineDash(e.id === selecao ? [6, 4] : [8, 5]);
+    cx2.beginPath();
+    e.pontos.forEach((p, i) => { const t = mundoParaTela(p.x, p.y); i ? cx2.lineTo(t.x, t.y) : cx2.moveTo(t.x, t.y); });
+    cx2.closePath(); cx2.stroke(); cx2.setLineDash([]);
+    // rótulo com o rebaixo
+    const cxm = e.pontos.reduce((t, p) => t + p.x, 0) / e.pontos.length;
+    const cym = e.pontos.reduce((t, p) => t + p.y, 0) / e.pontos.length;
+    const tm = mundoParaTela(cxm, cym);
+    cx2.fillStyle = '#6a4f9c'; cx2.font = '10px sans-serif'; cx2.textAlign = 'center';
+    cx2.fillText(`teto -${(e.rebaixo || 0.3).toFixed(2).replace('.', ',')} m`, tm.x, tm.y);
   }
 
   // vigas (2D): linha dupla com rótulo da seção
@@ -880,6 +942,49 @@ function reconstruir3d() {
       scene.add(m);
     }
 
+    // newels (montantes) e corrimão das escadas
+    for (const e of elems.filter(e => e.tipo === 'escada')) {
+      if (!e.corrimao) continue;
+      const nDeg = Math.max(2, Math.round(e.degraus));
+      const altDeg = h / nDeg;
+      const c = Math.cos(e.angulo), s = Math.sin(e.angulo);
+      const meiaLarg = e.largura / 2 - 0.06;
+      const newels = newelsEscada(e);
+      for (const nw of newels) {
+        const alturaBase = nw.alturaDeg * h; // cota do degrau neste ponto
+        const alturaNewel = CORRIMAO_CFG.altura + 0.05; // até à mão do corrimão
+        const g = new THREE.BoxGeometry(CORRIMAO_CFG.newelLargura, alturaNewel, CORRIMAO_CFG.newelLargura);
+        const m = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ color: '#6d4c41' }));
+        m.position.set(nw.x - s * meiaLarg, z0 + alturaBase + alturaNewel / 2, -(nw.y + c * meiaLarg));
+        m.castShadow = true;
+        scene.add(m);
+      }
+      // corrimão inclinado: caixa rotacionada acompanhando a escada
+      const comprCorr = Math.hypot(e.comprimento, h); // comprimento real do corrimão (subindo)
+      const angIncl = Math.atan2(h, e.comprimento);
+      const gC = new THREE.BoxGeometry(comprCorr, 0.05, 0.08);
+      const mC = new THREE.Mesh(gC, new THREE.MeshLambertMaterial({ color: '#8d6e63' }));
+      mC.position.set(e.x - s * meiaLarg, z0 + h / 2 + CORRIMAO_CFG.altura + 0.025, -(e.y + c * meiaLarg));
+      // orientar: primeiro girar para a direção da escada, depois inclinar
+      mC.rotation.order = 'YXZ';
+      mC.rotation.y = e.angulo;
+      mC.rotation.x = -angIncl;
+      mC.castShadow = true;
+      scene.add(mC);
+    }
+
+    // tetos rebaixados: laje suspensa abaixo da laje principal
+    for (const e of elems.filter(e => e.tipo === 'teto')) {
+      if (!e.pontos || e.pontos.length < 3) continue;
+      const forma = new THREE.Shape();
+      e.pontos.forEach((p, i) => i ? forma.lineTo(p.x, -p.y) : forma.moveTo(p.x, -p.y));
+      const g = new THREE.ExtrudeGeometry(forma, { depth: 0.02, bevelEnabled: false });
+      const m = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ color: '#e0e0e0' }));
+      m.rotation.x = Math.PI / 2;
+      m.position.y = z0 + h - (e.rebaixo || 0.3);
+      scene.add(m);
+    }
+
     // vigas: caixa horizontal sob a laje (cota do teto)
     for (const e of elems.filter(e => e.tipo === 'viga')) {
       const zBase = z0 + h - e.altura;
@@ -1036,8 +1141,22 @@ cv2.addEventListener('mousedown', ev => {
     desenhar2d();
     return;
   }
-  // reutilizar a posição já tratada pelo OSNAP/ORTHO do mousemove (mais precisa)
-  const m = (ev.type === 'mousedown') ? mouse2d : posMouse2d(ev);
+  // recalcular a posição com o fluxo completo de snap (osnap → ortho → grade) a partir do evento,
+  // para não depender de um mousemove anterior (pode estar desatualizado — causa do 'offset')
+  let mClick = posMouse2d(ev);
+  const osClick = buscarOsnap(ev.offsetX, ev.offsetY);
+  if (osClick) {
+    mClick = { x: osClick.x, y: osClick.y };
+  } else {
+    const spClick = snapParede(mClick);
+    if (spClick) mClick = { x: spClick.x, y: spClick.y };
+    else mClick = { x: aplicarSnap(mClick.x), y: aplicarSnap(mClick.y) };
+  }
+  const baseClick = preview?.pontos?.[preview.pontos.length - 1];
+  if (baseClick && ['parede', 'rampa', 'escada', 'viga'].includes(ferramenta)) {
+    mClick = aplicarOrtho(baseClick, mClick);
+  }
+  const m = mClick;
   const mx = m.x, my = m.y;
 
   if (ferramenta === 'parede') {
@@ -1072,8 +1191,18 @@ cv2.addEventListener('mousedown', ev => {
       projeto.elementos.push({ id: ++uid, tipo: 'escada', andar: projeto.idAndarAtivo,
         x: (p1.x + mx) / 2, y: (p1.y + my) / 2,
         comprimento, largura: opcoesFerramenta.escada.largura, angulo: Math.atan2(my - p1.y, mx - p1.x),
-        degraus: Math.max(2, Math.round(comprimento / 0.28)) });
+        degraus: Math.max(2, Math.round(comprimento / 0.28)), corrimao: true });
       preview = null; salvarEstado(); sincronizar();
+    }
+    desenhar2d();
+  } else if (ferramenta === 'teto') {
+    if (!preview) preview = { pontos: [], fechado: false };
+    if (preview.pontos.length >= 3 && Math.hypot(mx - preview.pontos[0].x, my - preview.pontos[0].y) < 0.4) {
+      projeto.elementos.push({ id: ++uid, tipo: 'teto', andar: projeto.idAndarAtivo,
+        pontos: preview.pontos, fechado: true, rebaixo: opcoesFerramenta.teto.rebaixo });
+      preview = null; salvarEstado(); sincronizar();
+    } else {
+      preview.pontos.push({ x: mx, y: my });
     }
     desenhar2d();
   } else if (ferramenta === 'viga') {
@@ -1227,7 +1356,7 @@ cv2.addEventListener('mousemove', ev => {
   if (ferramenta === 'medir' && medicao) { medicao.x2 = m.x; medicao.y2 = m.y; desenhar2d(); }
   else if (ferramenta === 'zoomJanela' && zoomJanelaAtivo) { zoomJanelaAtivo.x2 = m.x; zoomJanelaAtivo.y2 = m.y; desenhar2d(); }
   else if (ferramenta === 'corte' && corteAtivo != null) { const lc = cortes.find(x => x.id === corteAtivo); if (lc) { lc.x2 = m.x; lc.y2 = m.y; desenhar2d(); } }
-  else if (['parede', 'laje', 'telhado', 'escada', 'rampa', 'viga'].includes(ferramenta) && preview) desenhar2d();
+  else if (['parede', 'laje', 'telhado', 'teto', 'escada', 'rampa', 'viga'].includes(ferramenta) && preview) desenhar2d();
   else atualizarCoordStatus(m);
 });
 
@@ -1236,7 +1365,7 @@ cv2.addEventListener('mouseup', () => {
   if (ferramenta === 'medir' && medicao) { medicao = { ...medicao }; desenhar2d(); }
 });
 cv2.addEventListener('dblclick', () => {
-  if ((ferramenta === 'laje' || ferramenta === 'telhado') && preview && preview.pontos.length >= 3) {
+  if ((ferramenta === 'laje' || ferramenta === 'telhado' || ferramenta === 'teto') && preview && preview.pontos.length >= 3) {
     const tipo = ferramenta;
     const comum = { id: ++uid, tipo, andar: projeto.idAndarAtivo, pontos: preview.pontos, fechado: true };
     if (tipo === 'laje') Object.assign(comum, { espessura: opcoesFerramenta.laje.espessura });
@@ -1286,6 +1415,9 @@ function elementoSobMouse(x, y) {
     const dx = x - e.x, dy = y - e.y;
     const lx = dx * c2 - dy * s2, ly = dx * s2 + dy * c2;
     if (Math.abs(lx) < comp / 2 && Math.abs(ly) < larg / 2) return e;
+  }
+  for (const e of projeto.elementos.filter(e => e.andar === projeto.idAndarAtivo && e.tipo === 'teto' && e.fechado)) {
+    if (pontoEmPoligono(x, y, e.pontos)) return e;
   }
   for (const e of projeto.elementos.filter(e => e.andar === projeto.idAndarAtivo && e.tipo === 'texto')) {
     if (Math.hypot(x - e.x, y - e.y) < 0.5) return e;
@@ -1350,9 +1482,16 @@ function atualizarPainelProps() {
   } else if (e.tipo === 'laje') {
     linhas = inp('espessura', 'Espessura (m)', 0.01) + `<tr><td>Vértices</td><td>${e.pontos.length}</td></tr>`;
   } else if (e.tipo === 'escada') {
+    const dimAuto = null;
     linhas = inp('comprimento', 'Comprimento (m)', 0.05) + inp('largura', 'Largura (m)', 0.05) +
              inp('degraus', 'Nº de degraus', 1) +
-             `<tr><td>Altura/degrau</td><td>${(andarAtivo().alturaPisoPiso / Math.max(2, e.degraus)).toFixed(3)} m</td></tr>`;
+             `<tr><td>Altura/degrau</td><td>${(andarAtivo().alturaPisoPiso / Math.max(2, e.degraus)).toFixed(3).replace('.', ',')} m</td></tr>` +
+             `<tr><td>Corrimão</td><td><label><input type="checkbox" data-campo="corrimao" ${e.corrimao ? 'checked' : ''}> com newels (NP EN 17210: 0,90 m)</label></td></tr>`;
+  } else if (e.tipo === 'teto') {
+    linhas = inp('rebaixo', 'Rebaixo abaixo da laje (m)', 0.05) +
+             `<tr><td>Cota do teto</td><td>+${(andarAtivo().alturaPisoPiso - (e.rebaixo || 0.3)).toFixed(2).replace('.', ',')} m</td></tr>` +
+             `<tr><td>Pé-direito result.</td><td>${((andarAtivo().alturaPisoPiso - (e.rebaixo || 0.3))).toFixed(2).replace('.', ',')} m</td></tr>` +
+             `<tr><td>Vértices</td><td>${e.pontos.length}</td></tr>`;
   } else if (e.tipo === 'pontoEletrico' || e.tipo === 'pontoHidraulico') {
     const def = PONTOS_INSTALACOES[e.ponto];
     linhas = `<tr><td>Tipo</td><td>${def ? def.nome : e.ponto}</td></tr>` +
@@ -1402,6 +1541,7 @@ function atualizarPainelProps() {
     <div style="margin-top:8px"><button class="btn-pequeno" id="btnExcluir">Excluir elemento</button></div>`;
   div.querySelectorAll('input[data-campo]').forEach(i => i.addEventListener('change', () => {
     if (i.dataset.graus) e[i.dataset.campo] = (parseFloat(i.value) || 0) * Math.PI / 180;
+    else if (i.type === 'checkbox') e[i.dataset.campo] = i.checked;
     else if (i.type === 'text' || i.dataset.campo === 'texto') e[i.dataset.campo] = i.value;
     else e[i.dataset.campo] = parseFloat(i.value) || 0;
     if (e.tipo === 'rampa' && ['comprimento', 'desnivel'].includes(i.dataset.campo)) {
@@ -1608,9 +1748,9 @@ function pontosOsnap() {
     const inter = interseccaoLinhas(
       { x: paredes[i].x1, y: paredes[i].y1 }, { x: paredes[i].x2, y: paredes[i].y2 },
       { x: paredes[j].x1, y: paredes[j].y1 }, { x: paredes[j].x2, y: paredes[j].y2 });
-    if (inter && inter.u >= 0 && inter.u <= 1) {
-      const px = paredes[i].x1 + (paredes[i].x2 - paredes[i].x1) * inter.u;
-      const py = paredes[i].y1 + (paredes[i].y2 - paredes[i].y1) * inter.u;
+    if (inter && inter.t >= 0 && inter.t <= 1 && inter.u >= 0 && inter.u <= 1) {
+      const px = paredes[i].x1 + (paredes[i].x2 - paredes[i].x1) * inter.t;
+      const py = paredes[i].y1 + (paredes[i].y2 - paredes[i].y1) * inter.t;
       pts.push({ x: px, y: py, tipo: 'interseção' });
     }
   }
@@ -1630,7 +1770,9 @@ function buscarOsnap(mxTela, myTela) {
 // snap magnético: ponto mais próximo em qualquer parede (projeção perpendicular)
 function snapParede(mLivre) {
   if (!osnapAtivo) return null;
-  let melhor = null, melhorD = 0.22; // tolerância em metros (~22 cm no mundo)
+  // tolerância na tela: 12 px convertidos para metros pela escala atual (consistente em qualquer zoom)
+  const tolPx = 12 / Math.max(1, camera2d.escala);
+  let melhor = null, melhorD = tolPx;
   for (const e of projeto.elementos.filter(x => x.andar === projeto.idAndarAtivo && x.tipo === 'parede')) {
     const d = distanciaPontoSegmento(mLivre.x, mLivre.y, e.x1, e.y1, e.x2, e.y2);
     if (d < melhorD) {
@@ -1730,8 +1872,66 @@ function limitesDesenho() {
   return { xMin, xMax, yMin, yMax, tem };
 }
 // zoom extensões: enquadra tudo com margem
+// comando: remover elementos 'fantasma' criados pelo antigo bug de snap (longe do desenho real)
+function limparElementosDistantes(raioMax = 60) {
+  const antes = projeto.elementos.length;
+  // mediana do centroide dos elementos como referência
+  const centros = projeto.elementos.map(e => {
+    if (e.tipo === 'parede') return { x: (e.x1 + e.x2) / 2, y: (e.y1 + e.y2) / 2 };
+    if (e.x != null) return { x: e.x, y: e.y };
+    if (e.pontos && e.pontos.length) return { x: e.pontos[0].x, y: e.pontos[0].y };
+    return { x: 0, y: 0 };
+  });
+  const med = { x: centros.sort((a, b) => a.x - b.x)[Math.floor(centros.length / 2)]?.x ?? 0,
+                y: centros.sort((a, b) => a.y - b.y)[Math.floor(centros.length / 2)]?.y ?? 0 };
+  projeto.elementos = projeto.elementos.filter(e => {
+    let cx, cy;
+    if (e.tipo === 'parede') { cx = (e.x1 + e.x2) / 2; cy = (e.y1 + e.y2) / 2; }
+    else if (e.x != null) { cx = e.x; cy = e.y; }
+    else if (e.pontos && e.pontos.length) { cx = e.pontos[0].x; cy = e.pontos[0].y; }
+    else return true;
+    return Math.hypot(cx - med.x, cy - med.y) <= raioMax;
+  });
+  const removidos = antes - projeto.elementos.length;
+  if (removidos > 0) { salvarEstado(); sincronizar(); }
+  return removidos;
+}
+
 function zoomExtensões() {
-  const b = limitesDesenho();
+  let b = limitesDesenho();
+  // proteção anti-fantasma: se os limites forem absurdamente grandes (>200 m), o desenho
+  // provavelmente contém elementos perdidos do antigo bug — enquadrar apenas a região central
+  if (b.xMax - b.xMin > 200 || b.yMax - b.yMin > 200) {
+    const centros = projeto.elementos.map(e => {
+      if (e.tipo === 'parede') return { x: (e.x1 + e.x2) / 2, y: (e.y1 + e.y2) / 2 };
+      if (e.x != null) return { x: e.x, y: e.y };
+      if (e.pontos && e.pontos.length) return { x: e.pontos[0].x, y: e.pontos[0].y };
+      return { x: 0, y: 0 };
+    });
+    const medX = centros.sort((a, b2) => a.x - b2.x)[Math.floor(centros.length / 2)]?.x ?? 0;
+    const medY = centros.filter(() => true).sort((a, b2) => a.y - b2.y)[Math.floor(centros.length / 2)]?.y ?? 0;
+    // usar apenas elementos num raio de 60 m da mediana
+    const raio = 60;
+    let xMin = 0, xMax = 0, yMin = 0, yMax = 0, tem = false;
+    for (const e of projeto.elementos) {
+      let cx, cy;
+      if (e.tipo === 'parede') { cx = (e.x1 + e.x2) / 2; cy = (e.y1 + e.y2) / 2; }
+      else if (e.x != null) { cx = e.x; cy = e.y; }
+      else if (e.pontos && e.pontos.length) { cx = e.pontos[0].x; cy = e.pontos[0].y; }
+      else continue;
+      if (Math.hypot(cx - medX, cy - medY) > raio) continue;
+      // incluir todos os pontos do elemento
+      const pts = e.tipo === 'parede' ? [{x: e.x1, y: e.y1}, {x: e.x2, y: e.y2}] :
+                  (e.pontos || [{x: cx, y: cy}]);
+      for (const p of pts) {
+        if (!tem) { xMin = xMax = p.x; yMin = yMax = p.y; tem = true; }
+        xMin = Math.min(xMin, p.x); xMax = Math.max(xMax, p.x);
+        yMin = Math.min(yMin, p.y); yMax = Math.max(yMax, p.y);
+      }
+    }
+    if (!tem) { xMin = -10; xMax = 10; yMin = -10; yMax = 10; }
+    b = { xMin, xMax, yMin, yMax, tem };
+  }
   const W = cv2.clientWidth, H = cv2.clientHeight;
   const margem = 0.15;
   const largura = Math.max(b.xMax - b.xMin, 1) * (1 + margem);
@@ -1762,7 +1962,7 @@ const ATALHOS_FERRAMENTA = {
   'l': 'laje', 'c': 'coluna', 'e': 'escada', 'r': 'rampa',
   't': 'telhado', 'o': 'objeto',
   'g': 'corte', 'h': 'terreno',
-  'p': 'pontoInst', 'q': 'circuito', 'v': 'viga', 'a': 'texto',
+  'p': 'pontoInst', 'q': 'circuito', 'v': 'viga', 'a': 'texto', 'k': 'teto',
 };
 function ativarFerramenta(nome) {
   const botao = document.querySelector(`.btn-ribbon[data-ferr="${nome}"]`);
@@ -1786,6 +1986,11 @@ window.addEventListener('keydown', ev => {
     timerComando = setTimeout(() => { bufferComando = ''; }, 900);
     const COMANDOS_NAV = {
       'ze': () => zoomExtensões(),
+      'ld': () => {
+        const n = limparElementosDistantes();
+        alert(n > 0 ? `${n} elemento(s) distante(s) removido(s) — o desenho foi limpo de pontos fantasma.` : 'Nenhum elemento distante encontrado.');
+        zoomExtensões();
+      },
       'zt': () => zoomExtensões(),  // zoom tudo = extensões (inclui origem)
       'zj': () => { ferramenta = 'zoomJanela'; renderizarBarraOpcoes(); desenhar2d(); },
       'pp': () => { ferramenta = 'pan'; renderizarBarraOpcoes(); desenhar2d(); },
@@ -3729,6 +3934,15 @@ function exportarIFC() {
       add(`#${pos}=IFCAXIS2PLACEMENT3D(#${xyz(0,0,0)},$,$);`);
       const pds = corpoExtrudado(idPerfil, def.alt, pos);
       add(`#${novoId()}=IFCFURNITURE('${guidIFC()}',#${idDono},'${escIFC(def.nome)} ${e.id}',$,$,#${idsPlaceAndar[a.id]},#${pds},$);`);
+    }
+
+    for (const e of elems.filter(e => e.tipo === 'teto' && e.fechado && e.pontos.length >= 3)) {
+      const idPerfil = perfilPoligono(e.pontos);
+      const pos = novoId();
+      const oT = xyz(0, 0, z0 + h - (e.rebaixo || 0.3));
+      add(`#${pos}=IFCAXIS2PLACEMENT3D(#${oT},$,$);`);
+      const pds = corpoExtrudado(idPerfil, 0.02, pos);
+      add(`#${novoId()}=IFCCOVERING('${guidIFC()}','Teto rebaixado ${e.id} (-${(e.rebaixo || 0.3).toFixed(2)} m)',$,$,#${idsPlaceAndar[a.id]},#${pds},$,.CEILING.);`);
     }
 
     for (const e of elems.filter(e => e.tipo === 'viga')) {
