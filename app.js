@@ -1872,8 +1872,66 @@ function limitesDesenho() {
   return { xMin, xMax, yMin, yMax, tem };
 }
 // zoom extensões: enquadra tudo com margem
+// comando: remover elementos 'fantasma' criados pelo antigo bug de snap (longe do desenho real)
+function limparElementosDistantes(raioMax = 60) {
+  const antes = projeto.elementos.length;
+  // mediana do centroide dos elementos como referência
+  const centros = projeto.elementos.map(e => {
+    if (e.tipo === 'parede') return { x: (e.x1 + e.x2) / 2, y: (e.y1 + e.y2) / 2 };
+    if (e.x != null) return { x: e.x, y: e.y };
+    if (e.pontos && e.pontos.length) return { x: e.pontos[0].x, y: e.pontos[0].y };
+    return { x: 0, y: 0 };
+  });
+  const med = { x: centros.sort((a, b) => a.x - b.x)[Math.floor(centros.length / 2)]?.x ?? 0,
+                y: centros.sort((a, b) => a.y - b.y)[Math.floor(centros.length / 2)]?.y ?? 0 };
+  projeto.elementos = projeto.elementos.filter(e => {
+    let cx, cy;
+    if (e.tipo === 'parede') { cx = (e.x1 + e.x2) / 2; cy = (e.y1 + e.y2) / 2; }
+    else if (e.x != null) { cx = e.x; cy = e.y; }
+    else if (e.pontos && e.pontos.length) { cx = e.pontos[0].x; cy = e.pontos[0].y; }
+    else return true;
+    return Math.hypot(cx - med.x, cy - med.y) <= raioMax;
+  });
+  const removidos = antes - projeto.elementos.length;
+  if (removidos > 0) { salvarEstado(); sincronizar(); }
+  return removidos;
+}
+
 function zoomExtensões() {
-  const b = limitesDesenho();
+  let b = limitesDesenho();
+  // proteção anti-fantasma: se os limites forem absurdamente grandes (>200 m), o desenho
+  // provavelmente contém elementos perdidos do antigo bug — enquadrar apenas a região central
+  if (b.xMax - b.xMin > 200 || b.yMax - b.yMin > 200) {
+    const centros = projeto.elementos.map(e => {
+      if (e.tipo === 'parede') return { x: (e.x1 + e.x2) / 2, y: (e.y1 + e.y2) / 2 };
+      if (e.x != null) return { x: e.x, y: e.y };
+      if (e.pontos && e.pontos.length) return { x: e.pontos[0].x, y: e.pontos[0].y };
+      return { x: 0, y: 0 };
+    });
+    const medX = centros.sort((a, b2) => a.x - b2.x)[Math.floor(centros.length / 2)]?.x ?? 0;
+    const medY = centros.filter(() => true).sort((a, b2) => a.y - b2.y)[Math.floor(centros.length / 2)]?.y ?? 0;
+    // usar apenas elementos num raio de 60 m da mediana
+    const raio = 60;
+    let xMin = 0, xMax = 0, yMin = 0, yMax = 0, tem = false;
+    for (const e of projeto.elementos) {
+      let cx, cy;
+      if (e.tipo === 'parede') { cx = (e.x1 + e.x2) / 2; cy = (e.y1 + e.y2) / 2; }
+      else if (e.x != null) { cx = e.x; cy = e.y; }
+      else if (e.pontos && e.pontos.length) { cx = e.pontos[0].x; cy = e.pontos[0].y; }
+      else continue;
+      if (Math.hypot(cx - medX, cy - medY) > raio) continue;
+      // incluir todos os pontos do elemento
+      const pts = e.tipo === 'parede' ? [{x: e.x1, y: e.y1}, {x: e.x2, y: e.y2}] :
+                  (e.pontos || [{x: cx, y: cy}]);
+      for (const p of pts) {
+        if (!tem) { xMin = xMax = p.x; yMin = yMax = p.y; tem = true; }
+        xMin = Math.min(xMin, p.x); xMax = Math.max(xMax, p.x);
+        yMin = Math.min(yMin, p.y); yMax = Math.max(yMax, p.y);
+      }
+    }
+    if (!tem) { xMin = -10; xMax = 10; yMin = -10; yMax = 10; }
+    b = { xMin, xMax, yMin, yMax, tem };
+  }
   const W = cv2.clientWidth, H = cv2.clientHeight;
   const margem = 0.15;
   const largura = Math.max(b.xMax - b.xMin, 1) * (1 + margem);
@@ -1928,6 +1986,11 @@ window.addEventListener('keydown', ev => {
     timerComando = setTimeout(() => { bufferComando = ''; }, 900);
     const COMANDOS_NAV = {
       'ze': () => zoomExtensões(),
+      'ld': () => {
+        const n = limparElementosDistantes();
+        alert(n > 0 ? `${n} elemento(s) distante(s) removido(s) — o desenho foi limpo de pontos fantasma.` : 'Nenhum elemento distante encontrado.');
+        zoomExtensões();
+      },
       'zt': () => zoomExtensões(),  // zoom tudo = extensões (inclui origem)
       'zj': () => { ferramenta = 'zoomJanela'; renderizarBarraOpcoes(); desenhar2d(); },
       'pp': () => { ferramenta = 'pan'; renderizarBarraOpcoes(); desenhar2d(); },
